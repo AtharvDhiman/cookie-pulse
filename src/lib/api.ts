@@ -1,6 +1,13 @@
 // Browser-side fetchers for our own /api/* route handlers. Every third-party HTTP API is proxied
 // there (CORS + caching + one place for fallbacks); only the RPC is called directly.
-import type { MarketsSnapshot, Quote, SwapTxResponse, TokenRegistry, WalletNft } from './types';
+import type {
+  MarketsSnapshot,
+  Quote,
+  RegistryView,
+  SwapTxResponse,
+  TokenRegistry,
+  WalletNft,
+} from './types';
 
 async function getJson<T>(url: string, signal?: AbortSignal): Promise<T> {
   const res = await fetch(url, { signal });
@@ -11,7 +18,9 @@ async function getJson<T>(url: string, signal?: AbortSignal): Promise<T> {
   return (await res.json()) as T;
 }
 
-export const getRegistry = (signal?: AbortSignal) => getJson<TokenRegistry>('/api/tokens', signal);
+/** `full` is ~2.7 MB and several seconds; ask for it only when a surface needs unpriced rows. */
+export const getRegistry = (view: RegistryView, signal?: AbortSignal) =>
+  getJson<TokenRegistry>(view === 'full' ? '/api/tokens?view=full' : '/api/tokens', signal);
 
 export const getMarkets = (signal?: AbortSignal) => getJson<MarketsSnapshot>('/api/markets', signal);
 

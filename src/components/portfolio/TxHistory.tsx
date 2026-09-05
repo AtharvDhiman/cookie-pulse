@@ -30,7 +30,7 @@ export function TxHistory() {
       {isLoading ? (
         <div>
           {[0, 1, 2, 3, 4].map((i) => (
-            <div key={i} className="flex items-center gap-3 border-b border-hairline/10/60 px-4 py-3 last:border-0">
+            <div key={i} className="flex items-center gap-3 border-b border-hairline/10 px-4 py-3 last:border-0">
               <Skeleton className="h-4 w-16" />
               <Skeleton className="h-3 w-32" />
               <Skeleton className="ml-auto h-3 w-14" />
@@ -52,7 +52,7 @@ export function TxHistory() {
           {data.map((tx) => (
             <li
               key={tx.signature}
-              className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-hairline/10/60 px-4 py-3 last:border-0"
+              className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-hairline/10 px-4 py-3 last:border-0"
             >
               <Pill tone={tx.err ? 'down' : 'up'}>{tx.err ? 'Failed' : 'Success'}</Pill>
 

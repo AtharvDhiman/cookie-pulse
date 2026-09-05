@@ -2,7 +2,9 @@
 
 // DAS `getAssetsByOwner` is best effort — Cookie Chain's indexer is not guaranteed to cover every
 // wallet, so a failed call hides the whole section rather than showing an error the user cannot act
-// on. Off-chain image URLs 404 often, hence the per-tile fallback.
+// on. Off-chain image URLs 404 often, hence the per-tile fallback. `/api/das` returns collectibles
+// only — the indexer ignores `showFungible`, so the wallet's SPL balances are dropped there rather
+// than reappearing here as tiles for rows the holdings table already lists.
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ImageOff } from 'lucide-react';
@@ -56,17 +58,13 @@ export function NftGrid({ owner }: { owner: string }) {
   if (isError) return null;
 
   const nfts = data?.nfts ?? [];
-  // The route pages at 50, so a bigger wallet would otherwise be reported as holding exactly 50.
-  const total = data?.total ?? nfts.length;
 
   return (
     <Card as="section" className="overflow-hidden">
       <header className="flex items-center justify-between gap-2 border-b border-hairline/10 px-4 py-3">
         <h2 className="text-sm font-bold tracking-tight">NFTs</h2>
         {!isLoading && nfts.length > 0 ? (
-          <span className="text-xs text-muted">
-            {total > nfts.length ? `${nfts.length} of ${total} held` : `${total} held`}
-          </span>
+          <span className="text-xs text-muted">{nfts.length} held</span>
         ) : null}
       </header>
 
@@ -80,7 +78,7 @@ export function NftGrid({ owner }: { owner: string }) {
           ))}
         </div>
       ) : nfts.length === 0 ? (
-        <EmptyState title="No NFTs" hint="Nothing indexed for this wallet on Cookie Chain." />
+        <EmptyState title="No NFTs" hint="No collectibles indexed for this wallet on Cookie Chain." />
       ) : (
         <div className="grid grid-cols-2 gap-3 p-4 sm:grid-cols-3 lg:grid-cols-5">
           {nfts.map((nft) => (

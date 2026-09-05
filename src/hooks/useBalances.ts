@@ -8,7 +8,7 @@ import { PublicKey } from '@solana/web3.js';
 import { useConnection, useWallet } from '@solana/wallet-adapter-react';
 import { COOK_DECIMALS, TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID } from '@/lib/config';
 import { num, pick } from '@/lib/normalize';
-import type { Token, TokenBalance } from '@/lib/types';
+import type { TokenBalance } from '@/lib/types';
 import { useRegistry } from './useMarketData';
 
 /** Native COOK, in whole COOK. */
@@ -33,12 +33,11 @@ interface ParsedAccount {
   account: { data: unknown };
 }
 
-function toBalances(
-  accounts: ParsedAccount[],
-  programId: string,
-  byMint: Map<string, Token>,
-): TokenBalance[] {
-  const out: TokenBalance[] = [];
+/** What the RPC alone knows. Registry-derived fields are attached at read time, not cached here. */
+type RawBalance = Omit<TokenBalance, 'token' | 'valueUsd'>;
+
+function toBalances(accounts: ParsedAccount[], programId: string): RawBalance[] {
+  const out: RawBalance[] = [];
   for (const a of accounts) {
     const info = pick(a.account.data, ['parsed', 'info']);
     const mint = pick(info, ['mint']);
@@ -50,17 +49,7 @@ function toBalances(
     const amount = Number(raw) / 10 ** decimals;
     if (!Number.isFinite(amount) || amount <= 0) continue;
 
-    const token = byMint.get(mint) ?? null;
-    const price = token?.priceUsd ?? null;
-    out.push({
-      mint,
-      amount,
-      rawAmount: raw,
-      decimals,
-      programId,
-      token,
-      valueUsd: price !== null ? amount * price : null,
-    });
+    out.push({ mint, amount, rawAmount: raw, decimals, programId });
   }
   return out;
 }
@@ -68,13 +57,31 @@ function toBalances(
 export function useTokenBalances() {
   const { connection } = useConnection();
   const { publicKey } = useWallet();
-  const { byMint, isSuccess: registryReady } = useRegistry();
+  const { byMint } = useRegistry();
   const address = publicKey?.toBase58() ?? null;
 
+  // Pricing happens in `select`, not in `queryFn`. Baking it in at fetch time would freeze the
+  // holdings at whatever the registry said when the RPC answered, and keying the query on the
+  // registry's readiness instead would mint a second cache entry and reflash the skeletons every
+  // time the registry settles. React Query re-runs `select` when this callback changes identity,
+  // so a 30s registry refresh reprices the table without touching the RPC.
+  const withPrices = useCallback(
+    (raw: RawBalance[]): TokenBalance[] =>
+      raw
+        .map((b) => {
+          const token = byMint.get(b.mint) ?? null;
+          const priceUsd = token?.priceUsd ?? null;
+          return { ...b, token, valueUsd: priceUsd !== null ? b.amount * priceUsd : null };
+        })
+        // Unpriced holdings sort last rather than ranking alongside a genuine zero-value position.
+        .sort((a, b) => (b.valueUsd ?? -1) - (a.valueUsd ?? -1)),
+    [byMint],
+  );
+
   return useQuery({
-    queryKey: ['token-balances', address, registryReady],
+    queryKey: ['token-balances', address],
     enabled: Boolean(address),
-    queryFn: async (): Promise<TokenBalance[]> => {
+    queryFn: async (): Promise<RawBalance[]> => {
       const owner = new PublicKey(address!);
       const [classic, token2022] = await Promise.all([
         connection.getParsedTokenAccountsByOwner(owner, { programId: new PublicKey(TOKEN_PROGRAM_ID) }),
@@ -84,10 +91,11 @@ export function useTokenBalances() {
           .catch(() => ({ value: [] as ParsedAccount[] })),
       ]);
       return [
-        ...toBalances(classic.value as ParsedAccount[], TOKEN_PROGRAM_ID, byMint),
-        ...toBalances(token2022.value as ParsedAccount[], TOKEN_2022_PROGRAM_ID, byMint),
-      ].sort((a, b) => (b.valueUsd ?? -1) - (a.valueUsd ?? -1));
+        ...toBalances(classic.value as ParsedAccount[], TOKEN_PROGRAM_ID),
+        ...toBalances(token2022.value as ParsedAccount[], TOKEN_2022_PROGRAM_ID),
+      ];
     },
+    select: withPrices,
     refetchInterval: 30_000,
     staleTime: 15_000,
   });

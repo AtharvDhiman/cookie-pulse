@@ -3,8 +3,8 @@
 import 'server-only';
 import { serverConfig } from './config';
 import { fetchJson } from './http';
-import { num, num0, str, unwrap, pick } from './normalize';
-import type { Market, MarketsSnapshot, Token, TokenRegistry } from './types';
+import { isNftLike, num, num0, str, unwrap, pick } from './normalize';
+import type { Market, MarketsSnapshot, RegistryView, Token, TokenRegistry } from './types';
 
 function toToken(raw: unknown): Token | null {
   const mint = str(pick(raw, ['mint']));
@@ -36,18 +36,77 @@ function toToken(raw: unknown): Token | null {
   };
 }
 
-export async function fetchRegistry(): Promise<TokenRegistry> {
-  const json = await fetchJson<unknown>(`${serverConfig.cookiescan()}/api/tokens`, {
-    timeoutMs: 20_000,
-  });
-  const tokens = unwrap<unknown>(json, ['data', 'tokens'])
+/**
+ * A priced row is the only kind any surface can rank, route through or value a holding against.
+ * Measured 5 Sep 2026: all 72 mints reporting liquidity are priced, and the only 4 pool mints that
+ * are not priced sit in pools holding $0.00 — so the priced view drops no tradeable token.
+ */
+function isPriced(t: Token): boolean {
+  return t.priceUsd !== null && t.priceUsd > 0;
+}
+
+/**
+ * `metadata.description` is 717 KB of the 2.7 MB registry and is rendered by nothing. It stays in
+ * the full view — the "everything upstream has" escape hatch is the one place it could ever be
+ * surfaced — and is stripped from the view on the critical path.
+ */
+function withoutDescription(t: Token): Token {
+  return t.description === null ? t : { ...t, description: null };
+}
+
+/**
+ * The upstream body, memoised for the same 20 s the CDN header already promises. Upstream is 3.9 MB
+ * and 3–12 s cold, and it is fetched whole whichever view is asked for — the projection saves the
+ * browser's download, not this one. The memo means the screener's show-all toggle reuses the body
+ * the priced view already paid for, and it makes the two views provably the same snapshot, so their
+ * priced subsets cannot drift apart between two calls.
+ */
+const REGISTRY_TTL_MS = 20_000;
+let cachedBody: { at: number; body: unknown } | null = null;
+let inflight: Promise<unknown> | null = null;
+
+async function registryBody(): Promise<unknown> {
+  if (cachedBody && Date.now() - cachedBody.at < REGISTRY_TTL_MS) return cachedBody.body;
+  // Two views racing a cold memo would otherwise pull 3.9 MB twice; the second joins the first.
+  const pending =
+    inflight ??
+    fetchJson<unknown>(`${serverConfig.cookiescan()}/api/tokens`, { timeoutMs: 20_000 })
+      .then((body) => {
+        cachedBody = { at: Date.now(), body };
+        return body;
+      })
+      .finally(() => {
+        inflight = null;
+      });
+  inflight = pending;
+  return pending;
+}
+
+/**
+ * Upstream ignores `limit`, `offset`, `page`, `sort`, `minLiquidity`, `priced` and `hasPrice`
+ * (verified 5 Sep 2026), so the projection has to happen here. What it saves is the browser's
+ * share: 2.7 MB down to ~35 KB.
+ */
+export async function fetchRegistry(view: RegistryView = 'priced'): Promise<TokenRegistry> {
+  const json = await registryBody();
+  const all = unwrap<unknown>(json, ['data', 'tokens'])
     .map(toToken)
     .filter((t): t is Token => t !== null);
+
+  let nftLikeCount = 0;
+  for (const t of all) if (isNftLike(t)) nftLikeCount++;
+
   return {
-    tokens,
+    tokens: view === 'full' ? all : all.filter(isPriced).map(withoutDescription),
     // The registry response carries COOK USD at the top level — one fewer round trip.
     cookUsd: num(pick(json, ['cookUsd'])),
-    count: num(pick(json, ['count'])) ?? tokens.length,
+    // Counts describe the registry, never the projection: reading them off `tokens` would make the
+    // app understate the very thing it is projecting. `all.length` is the fallback only when
+    // upstream omits its own count, and it is still the unprojected length.
+    count: num(pick(json, ['count'])) ?? all.length,
+    fungibleCount: all.length - nftLikeCount,
+    nftLikeCount,
+    view,
   };
 }
 

@@ -19,10 +19,23 @@ export interface Token {
   holderCount: number;
 }
 
+/**
+ * How `/api/tokens` projected the rows it returned. `priced` is the default: the mints that carry a
+ * USD price, which is every mint with liquidity on this chain. `full` is the whole registry, ~2.7 MB.
+ */
+export type RegistryView = 'priced' | 'full';
+
 export interface TokenRegistry {
+  /** Projected per `view` — never the denominator for anything. */
   tokens: Token[];
   cookUsd: number | null;
+  /** Every entry upstream lists, including the rows this view projected away. Both views agree. */
   count: number;
+  /** Of the whole registry, the mints that are not single-edition NFTs. Both views agree. */
+  fungibleCount: number;
+  /** Of the whole registry, the single-edition NFTs. Both views agree. */
+  nftLikeCount: number;
+  view: RegistryView;
 }
 
 export interface Market {

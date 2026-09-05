@@ -70,7 +70,7 @@ function LoadingRows() {
   return (
     <div>
       {[0, 1, 2, 3].map((i) => (
-        <div key={i} className="flex items-center gap-3 border-b border-hairline/10/60 px-4 py-3 last:border-0">
+        <div key={i} className="flex items-center gap-3 border-b border-hairline/10 px-4 py-3 last:border-0">
           <Skeleton className="h-8 w-8" />
           <div className="flex-1 space-y-1.5">
             <Skeleton className="h-3 w-20" />
@@ -159,7 +159,7 @@ export function HoldingsTable({
               {rows.map((r) => (
                 <tr
                   key={r.key}
-                  className="border-b border-hairline/10/60 transition-colors last:border-0 hover:bg-surface2/60"
+                  className="border-b border-hairline/10 transition-colors last:border-0 hover:bg-surface2/60"
                 >
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2.5">

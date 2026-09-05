@@ -10,7 +10,8 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
-    "smoke": "tsx scripts/smoke.ts"
+    "smoke": "tsx scripts/smoke.ts",
+    "test:errors": "tsx scripts/errors.test.ts"
   },
   "dependencies": {
     "@solana/spl-token": "^0.4.9",

@@ -94,10 +94,16 @@ export default function PortfolioPage() {
   // Null rather than $0.00 when nothing on the books has a price at all.
   const totalUsd =
     cookValueUsd === null && tokenValueUsd === 0 ? null : (cookValueUsd ?? 0) + tokenValueUsd;
-  // Holding COOK the registry cannot price means the total is real but incomplete. Say so, rather
-  // than presenting a confident figure that quietly omits the largest position.
-  const totalExcludesCook = cookValueUsd === null && (cookAmount ?? 0) > 0 && totalUsd !== null;
   const pricedCount = (balances ?? []).filter((b) => b.valueUsd !== null).length;
+  // Anything the registry cannot price contributes nothing to the total — including COOK itself if
+  // its feed is down. Name how many were left out rather than presenting a confident figure that
+  // quietly omits them — the overwhelming majority of registry mints carry no price at all.
+  const unpricedCount =
+    (balances ?? []).length - pricedCount + (cookValueUsd === null && (cookAmount ?? 0) > 0 ? 1 : 0);
+  const totalNote =
+    totalUsd !== null && unpricedCount > 0
+      ? `excludes ${unpricedCount} unpriced holding${unpricedCount === 1 ? '' : 's'}`
+      : undefined;
   // A failed RPC read is "unknown", not zero — the stats and the holdings list must both say so.
   const balancesError = cookQuery.isError || tokensQuery.isError;
 
@@ -135,7 +141,7 @@ export default function PortfolioPage() {
         <Stat
           label="Total value"
           value={formatUsd(totalUsd)}
-          sub={totalExcludesCook ? `excludes ${COOK_SYMBOL} — no price feed` : undefined}
+          sub={totalNote}
           loading={loading}
         />
         <Stat

@@ -39,7 +39,7 @@ function CardHeading({ title, cta }: { title: string; cta: string }) {
 }
 
 function CookPriceCard() {
-  const { cookUsd, byMint, count, isLoading, isError } = useRegistry();
+  const { cookUsd, byMint, count, fungibleCount, isLoading, isError } = useRegistry();
 
   // `toToken` already maps the indexer's default 0 to null, so this renders an em dash rather than
   // a fabricated +0.00% whenever Cookiescan has no 24h window for COOK.
@@ -72,9 +72,16 @@ function CookPriceCard() {
           </>
         )}
 
+        {/* "6,473 tokens" would read as 6,473 comparable assets; three quarters of the registry is
+            one-of-one NFT editions. Both numbers come from the response envelope, not from the
+            projected row array. */}
         <p className="mt-auto pt-4 text-[11px] text-muted">
           Native {COOK_SYMBOL} ·{' '}
-          {isLoading ? '…' : isError ? '—' : count.toLocaleString('en-US')} tokens tracked
+          {isLoading || isError
+            ? '—'
+            : `${fungibleCount.toLocaleString('en-US')} fungible mints of ${count.toLocaleString(
+                'en-US',
+              )} registry entries`}
         </p>
       </CardLink>
     </Card>

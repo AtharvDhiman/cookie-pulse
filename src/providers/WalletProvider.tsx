@@ -13,6 +13,10 @@ import '@solana/wallet-adapter-react-ui/styles.css';
 
 export function CookieWalletProvider({ children }: { children: ReactNode }) {
   const wallets = useMemo(() => [new NightlyWalletAdapter()], []);
+  // `wsEndpoint` is load-bearing, not cosmetic: web3.js waits for the signature subscription to
+  // reach `subscribed` before it will fall back to a one-shot getSignatureStatus, so a socket that
+  // never upgrades leaves blockhash expiry as confirmTransaction's only exit. WS_URL is pinned to
+  // the RPC host for exactly that reason — see NOTES.md.
   const config = useMemo(
     () => ({ commitment: 'confirmed' as const, wsEndpoint: WS_URL, confirmTransactionInitialTimeout: 60_000 }),
     [],

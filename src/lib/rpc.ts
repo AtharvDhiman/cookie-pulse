@@ -52,6 +52,37 @@ export async function rpcCall<T>(method: string, params: unknown[] = [], signal?
   return r?.result as T;
 }
 
+/**
+ * The raw `getSignatureStatuses` entry for one signature, or null if the node has never seen it.
+ * `searchTransactionHistory` is what makes a late answer possible at all: without it the node only
+ * replies from its recent-status cache, which a slow confirmation has already fallen out of.
+ */
+export async function fetchSignatureStatus(
+  signature: string,
+  signal?: AbortSignal,
+): Promise<unknown> {
+  const res = await rpcCall<{ value?: unknown[] } | null>(
+    'getSignatureStatuses',
+    [[signature], { searchTransactionHistory: true }],
+    signal,
+  );
+  const value = res?.value;
+  return Array.isArray(value) ? (value[0] ?? null) : null;
+}
+
+/** Whether a blockhash can still be used. null when the node did not answer with a boolean. */
+export async function fetchBlockhashValid(
+  blockhash: string,
+  signal?: AbortSignal,
+): Promise<boolean | null> {
+  const res = await rpcCall<{ value?: unknown } | null>(
+    'isBlockhashValid',
+    [blockhash, { commitment: 'processed' }],
+    signal,
+  );
+  return typeof res?.value === 'boolean' ? res.value : null;
+}
+
 export const HEALTH_CALLS: RpcCall[] = [
   { id: 'health', method: 'getHealth' },
   { id: 'epoch', method: 'getEpochInfo' },

@@ -34,6 +34,46 @@ Both still go through the defensive `unwrap(json, ['data','tokens'])` /
 still used, but the Overview reads COOK's price from the registry response it already has, saving a
 round trip.
 
+## ❗ Correction: the WebSocket host is `rpc.cookiescan.io`, not `wss.cookiescan.io`
+
+BRIEF section 1 states `wss://wss.cookiescan.io` as fact (and section 6 tells the user to type it
+into Nightly). **That host does not serve a WebSocket.** It presents a TLS certificate issued for an
+unrelated domain and then answers with a redirect rather than a protocol upgrade:
+
+```
+Hostname/IP does not match certificate's altnames:
+Host: wss.cookiescan.io. is not in the cert's altnames: DNS:bakedbazaar.art
+```
+
+Measured through this repo's own `@solana/web3.js` (1.98.4), a `Connection` on `rpc.cookiescan.io`
+with each candidate as `wsEndpoint`, counting `onSlotChange` callbacks over a 10 s window:
+
+| `wsEndpoint` | Events in 10 s | First event | TLS altname errors |
+| --- | --- | --- | --- |
+| `wss://wss.cookiescan.io` | **0** | — | 7 (one per reconnect attempt) |
+| `wss://rpc.cookiescan.io` | **18 / 26** (two runs) | ~0.9–1.1 s | **0** |
+
+### Why this was the highest-severity defect in the app
+
+`WalletProvider` passes `WS_URL` straight into `ConnectionProvider` as `wsEndpoint`, so a dead socket
+is not merely a missing live feed — it breaks confirmation. In
+`node_modules/@solana/web3.js/lib/index.cjs.js`, `getTransactionConfirmationPromise` (≈ line 6553)
+opens the signature subscription and then gates its safety net behind it:
+
+```js
+await subscriptionSetupPromise;   // resolves only on state === 'subscribed'
+const response = await this.getSignatureStatus(signature);
+```
+
+On a socket that never upgrades, `subscriptionSetupPromise` never resolves, so the one-shot
+`getSignatureStatus` fallback never runs. The only remaining exit is the block-height expiry race
+(≈ line 6664) — roughly 69 s later. Net effect: **every successful mainnet transaction would have
+been reported to the user as a probable failure**, after a minute of spinning.
+
+**Decision:** `WS_URL` defaults to `wss://rpc.cookiescan.io`; the RPC host serves both. The
+`NEXT_PUBLIC_WS_URL` override is untouched, and `/bridge`, `.env.example` and the README all read
+the corrected value. The broken host is named nowhere in the app — only here, as the record.
+
 ## ❗ Correction: `marketData.liquidity` is USD, not COOK
 
 The brief says liquidity is denominated in COOK and instructs `liquidity × COOK price`. **It is

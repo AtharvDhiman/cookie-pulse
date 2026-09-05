@@ -132,7 +132,8 @@ required.
 2. Open **Settings → Networks → Solana** and add a custom RPC:
    - **Name** — `Cookie Chain`
    - **RPC** — `https://rpc.cookiescan.io`
-   - **WebSocket** — `wss://wss.cookiescan.io`
+   - **WebSocket** — `wss://rpc.cookiescan.io` (the RPC host also serves the socket; the `wss.`
+     subdomain the chain docs list does not upgrade — see NOTES.md)
 3. Reconnect on Cookie Pulse. Your COOK balance appears in the header.
 
 ## Get COOK
@@ -159,7 +160,7 @@ value.
 | | |
 | --- | --- |
 | RPC | `https://rpc.cookiescan.io` |
-| WebSocket | `wss://wss.cookiescan.io` |
+| WebSocket | `wss://rpc.cookiescan.io` (the RPC host — the `wss.` subdomain is dead, see NOTES.md) |
 | Explorer | `https://cookiescan.io` |
 | Native token | COOK, 9 decimals, mint `So11111111111111111111111111111111111111112` |
 | COOK on Solana | `36ZrtQoab5MhhySaP1YSTwUahSk6GRVUTtZ6cuVfm9e1` (Token-2022, 6 decimals) |
@@ -212,6 +213,13 @@ order — total cost is a fraction of a cent.
 
 **Setup**
 - [ ] Nightly installed, Cookie Chain RPC added (Settings → Networks → Solana), a little COOK bridged in.
+
+**WebSocket — do this before anything that signs**
+- [ ] The `/bridge` WebSocket row reads `wss://rpc.cookiescan.io`. Confirmation depends on that
+      socket: on the `wss.` host it never upgrades and every successful transaction sits at
+      "Confirming" until the blockhash expires (~69 s), then reports as a probable failure.
+- [ ] After the first Send below confirms, note how long "Confirming" lasted. A healthy socket
+      resolves in a slot or two; anything near 69 s means the subscription never came up.
 
 **Connect**
 - [ ] Nightly appears first in the wallet modal and connects.

@@ -1,6 +1,6 @@
 import { fetchQuote } from '@/lib/cookiebox';
 import { errorResponse, NO_CACHE_HEADERS } from '@/lib/http';
-import { MAX_SLIPPAGE_BPS } from '@/lib/config';
+import { parseSlippageBps } from '@/lib/config';
 
 export const revalidate = 0;
 export const dynamic = 'force-dynamic';
@@ -24,10 +24,9 @@ export async function GET(request: Request) {
     );
   }
 
-  const requested = Number(p.get('slippageBps'));
-  const slippageBps = Number.isFinite(requested)
-    ? Math.min(Math.max(Math.round(requested), 1), MAX_SLIPPAGE_BPS)
-    : 100;
+  // Shared with /api/swap-tx: the quote on screen and the transaction built from it must resolve an
+  // absent, empty or malformed field to the same slippage.
+  const slippageBps = parseSlippageBps(p.get('slippageBps'));
 
   try {
     // null = the aggregator has no route; that is a valid answer, not an error.

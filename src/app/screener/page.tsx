@@ -1,11 +1,13 @@
 'use client';
 
-// /screener — the whole registry (6470 tokens) filtered, sorted and paged on the client. The
-// registry is already in the React Query cache from the Overview, so this page costs no extra fetch.
+// /screener — Cookiescan's fungible mints, filtered, sorted and paged on the client. The default
+// fetch is the projected priced view (~35 KB, already warm from the Overview); the full 2.7 MB
+// registry is pulled only when "Show unpriced" is ticked.
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ChevronLeft, ChevronRight, Search, X } from 'lucide-react';
-import { useRegistry } from '@/hooks/useMarketData';
+import { useScreenerRegistry } from '@/hooks/useMarketData';
 import { formatUsd } from '@/lib/format';
+import { isNftLike } from '@/lib/normalize';
 import type { Token } from '@/lib/types';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/primitives';
@@ -21,7 +23,9 @@ import {
 const PAGE_SIZE = 50;
 const SEARCH_DEBOUNCE_MS = 200;
 
-/** One predicate for both the visible list and the "hidden by the filter" count under it. */
+const n = (v: number) => v.toLocaleString('en-US');
+
+/** Search predicate: symbol, name and mint, all lower-cased by the caller. */
 function matches(t: Token, q: string): boolean {
   return (
     t.symbol.toLowerCase().includes(q) ||
@@ -30,16 +34,42 @@ function matches(t: Token, q: string): boolean {
   );
 }
 
-export default function ScreenerPage() {
-  const { tokens, cookUsd, isLoading, isError } = useRegistry();
+/**
+ * Why the screener's denominator is smaller than the registry. Three quarters of what Cookiescan
+ * lists is one-of-one NFT editions; ranking them beside fungible mints was the app's least
+ * defensible number. Stated as a count and its method — deliberately not a browsable collection.
+ */
+function CompositionNote({
+  registryCount,
+  fungibleCount,
+  nftLikeCount,
+}: {
+  registryCount: number;
+  fungibleCount: number;
+  nftLikeCount: number;
+}) {
+  return (
+    <p className="mt-3 max-w-prose text-[11px] leading-relaxed text-muted">
+      Cookiescan lists {n(registryCount)} entries: {n(fungibleCount)} fungible mints and{' '}
+      {n(nftLikeCount)} individual NFT editions (0 decimals, supply 1). The editions are left out of
+      the screener — none carries a price, liquidity or a second holder. The split is computed from
+      each entry&rsquo;s own decimals and supply, and matches Cookiescan&rsquo;s DAS index, which
+      labels the same mints <code className="font-mono text-ink2">V1_NFT</code>.
+    </p>
+  );
+}
 
+export default function ScreenerPage() {
   const [input, setInput] = useState('');
   const [query, setQuery] = useState('');
   const [showUnpriced, setShowUnpriced] = useState(false);
   const [sort, setSort] = useState<SortState>(DEFAULT_SORT);
   const [page, setPage] = useState(1);
 
-  // Typing 6470 rows through a filter on every keystroke is wasteful; settle first, then filter.
+  const { tokens, cookUsd, registryCount, fungibleCount, nftLikeCount, isLoading, isError } =
+    useScreenerRegistry(showUnpriced);
+
+  // Typing 6473 rows through a filter on every keystroke is wasteful; settle first, then filter.
   useEffect(() => {
     const id = setTimeout(() => {
       setQuery(input);
@@ -59,14 +89,14 @@ export default function ScreenerPage() {
   }, []);
 
   const filtered = useMemo(() => {
-    // 6378 of 6470 tokens have no price feed — they are noise until someone asks for them.
-    const base = showUnpriced
-      ? tokens
-      : tokens.filter((t) => t.priceUsd !== null && t.priceUsd > 0);
+    // 4,852 of the 6,473 registry entries are single NFT editions, not mints anyone can screen —
+    // they carry no price, liquidity or second holder. Excluded from both views, counted in the
+    // footnote. The priced view has none of them anyway; this keeps the show-all view honest.
+    const base = tokens.filter((t) => !isNftLike(t));
     const q = query.trim().toLowerCase();
     if (!q) return base;
     return base.filter((t) => matches(t, q));
-  }, [tokens, showUnpriced, query]);
+  }, [tokens, query]);
 
   const sorted = useMemo(() => sortTokens(filtered, sort), [filtered, sort]);
 
@@ -82,35 +112,27 @@ export default function ScreenerPage() {
 
   const searching = query.trim().length > 0;
 
-  // The default filter drops 6378 of 6470 tokens, so an empty search result almost always means
-  // "hidden", not "does not exist" — saying otherwise would be a lie. Only counted once the visible
-  // result is already empty, so every match counted here is one the price filter removed.
-  const hiddenMatches = useMemo(() => {
-    if (showUnpriced || !searching || sorted.length > 0) return 0;
-    const q = query.trim().toLowerCase();
-    return tokens.reduce((n, t) => (matches(t, q) ? n + 1 : n), 0);
-  }, [tokens, showUnpriced, searching, sorted, query]);
-
+  // The default view holds only the priced mints, so a search that comes back empty here cannot say
+  // how many unpriced mints would have matched without pulling the full registry. It offers the
+  // toggle and the size of the set behind it rather than inventing a count.
   const emptyTitle = isError
     ? 'Could not load the token registry'
-    : hiddenMatches > 0
-      ? `Only unpriced tokens match “${query.trim()}”`
-      : searching
-        ? `No token matches “${query.trim()}”`
-        : showUnpriced
-          ? 'The registry came back empty'
-          : 'No priced tokens right now';
+    : searching
+      ? `No ${showUnpriced ? 'mint' : 'priced mint'} matches “${query.trim()}”`
+      : showUnpriced
+        ? 'The registry came back empty'
+        : 'No priced mints right now';
   const emptyHint = isError
     ? 'Cookiescan did not answer. The page retries on its own — or reload in a moment.'
-    : hiddenMatches > 0
-      ? `${hiddenMatches.toLocaleString('en-US')} unpriced ${
-          hiddenMatches === 1 ? 'token is' : 'tokens are'
-        } hidden — tick “Show unpriced” to include them.`
+    : searching && !showUnpriced
+      ? `Only priced mints are searched by default. Tick “Show unpriced” to search all ${n(
+          fungibleCount,
+        )} fungible mints.`
       : searching
-        ? 'Search matches symbol, name and mint address.'
+        ? 'Search matches symbol, name and mint address. NFT editions are not listed.'
         : showUnpriced
           ? 'Cookiescan listed no tokens. The page retries on its own.'
-          : 'Tick “Show unpriced” to list every token in the registry.';
+          : 'Tick “Show unpriced” to list every fungible mint in the registry.';
 
   return (
     <div className="py-2">
@@ -118,8 +140,8 @@ export default function ScreenerPage() {
         <div>
           <h1 className="font-display text-[26px] font-extrabold leading-tight tracking-tightest sm:text-[34px]">Screener</h1>
           <p className="mt-1 max-w-prose text-sm text-ink2">
-            Every token Cookiescan indexes, with the liquidity and volume actually recorded against
-            it on Cookie Chain.
+            Every fungible mint Cookiescan indexes, with the liquidity and volume actually recorded
+            against it on Cookie Chain.
           </p>
         </div>
         {cookUsd !== null ? (
@@ -169,13 +191,18 @@ export default function ScreenerPage() {
             Show unpriced
           </label>
 
+          {/* The denominator is the registry's own fungible-mint count from the response envelope,
+              never the length of the projected array — the projection must not shrink the number
+              the app reports about itself. */}
           <p className="ml-auto text-xs tabular-nums text-muted" aria-live="polite">
             {isLoading
-              ? 'Loading registry…'
-              : tokens.length === 0
+              ? showUnpriced
+                ? `Loading all ${n(registryCount)} registry entries…`
+                : 'Loading registry…'
+              : fungibleCount === 0
                 ? // Nothing loaded: the empty state below explains why, "0 of 0" would just add noise.
                   ''
-                : `${sorted.length.toLocaleString('en-US')} of ${tokens.length.toLocaleString('en-US')} tokens`}
+                : `${n(sorted.length)} of ${n(fungibleCount)} fungible mints`}
           </p>
         </div>
 
@@ -191,9 +218,8 @@ export default function ScreenerPage() {
         {!isLoading && sorted.length > 0 ? (
           <div className="flex flex-wrap items-center justify-between gap-3 border-t border-hairline/10 p-3">
             <p className="text-xs tabular-nums text-muted">
-              Showing {(start + 1).toLocaleString('en-US')}–
-              {Math.min(start + PAGE_SIZE, sorted.length).toLocaleString('en-US')} of{' '}
-              {sorted.length.toLocaleString('en-US')}
+              Showing {n(start + 1)}–{n(Math.min(start + PAGE_SIZE, sorted.length))} of{' '}
+              {n(sorted.length)}
             </p>
             <div className="flex items-center gap-2">
               <Button
@@ -219,6 +245,14 @@ export default function ScreenerPage() {
           </div>
         ) : null}
       </Card>
+
+      {nftLikeCount > 0 ? (
+        <CompositionNote
+          registryCount={registryCount}
+          fungibleCount={fungibleCount}
+          nftLikeCount={nftLikeCount}
+        />
+      ) : null}
     </div>
   );
 }

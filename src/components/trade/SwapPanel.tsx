@@ -10,26 +10,30 @@ import Link from 'next/link';
 import { VersionedTransaction } from '@solana/web3.js';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { useWalletModal } from '@solana/wallet-adapter-react-ui';
-import { AlertTriangle, ArrowDownUp, Loader2, RotateCw } from 'lucide-react';
+import { AlertTriangle, ArrowDownUp, Loader2, PauseCircle, RotateCw } from 'lucide-react';
 import { postSwapTx } from '@/lib/api';
 import {
+  COOK_DECIMALS,
   COOK_MINT,
   COOK_SYMBOL,
   DEFAULT_SLIPPAGE_BPS,
   FEE_RESERVE_COOK,
+  LAMPORTS_PER_COOK,
   MAX_SLIPPAGE_BPS,
   SLIPPAGE_PRESETS,
+  TOKEN_ACCOUNT_RENT_LAMPORTS,
+  slippageLabel,
 } from '@/lib/config';
 import { formatAmount, formatUsd, fromRawAmount, toRawAmount } from '@/lib/format';
-import type { FriendlyError } from '@/lib/errors';
+import { PresentableError, type FriendlyError } from '@/lib/errors';
 import { rankableTokens, useRegistry } from '@/hooks/useMarketData';
-import type { TokenBalance } from '@/lib/types';
+import type { Quote } from '@/lib/types';
 import { useCookBalance, useRefreshBalances, useTokenBalances } from '@/hooks/useBalances';
 import { useTransaction } from '@/hooks/useTransaction';
 import { useQuote } from '@/hooks/useQuote';
 import { Button } from '@/components/ui/Button';
 import { Card, EmptyState, Skeleton, cn } from '@/components/ui/primitives';
-import { RouteDisplay } from './RouteDisplay';
+import { RouteDisplay, compareRoutes, describeRouteCheck, type RouteCheck } from './RouteDisplay';
 import { TokenPicker } from './TokenPicker';
 
 /** Above this the impact is amber; above HIGH_IMPACT_PCT it is red and warned about explicitly. */
@@ -37,7 +41,20 @@ const WARN_IMPACT_PCT = 1;
 const HIGH_IMPACT_PCT = 5;
 const RAISED_SLIPPAGE_BPS = 300;
 
-const slippageLabel = (bps: number) => `${(bps / 100).toFixed(bps % 100 === 0 ? 0 : 1)}%`;
+/** The COOK fee reserve in lamports, so the MAX button and the sufficiency check stay exact. */
+const FEE_RESERVE_RAW = BigInt(Math.round(FEE_RESERVE_COOK * LAMPORTS_PER_COOK));
+
+/** A wallet's holding of one mint: every account it has for that mint, summed exactly. */
+interface Holding {
+  raw: bigint;
+  decimals: number;
+}
+
+/**
+ * Raw base units from the RPC (`tokenAmount.amount`) as a BigInt. Guarded because a bare `BigInt()`
+ * on an unexpected string throws, and that would take the whole panel down rather than one row.
+ */
+const safeBigInt = (v: string): bigint => (/^\d+$/.test(v) ? BigInt(v) : 0n);
 
 /** Raw base units -> an exact decimal string. Used for MAX so the field matches the account exactly. */
 function rawToDecimalString(raw: string, decimals: number): string {
@@ -46,12 +63,6 @@ function rawToDecimalString(raw: string, decimals: number): string {
   const whole = padded.slice(0, padded.length - decimals).replace(/^0+(?=\d)/, '');
   const frac = padded.slice(padded.length - decimals).replace(/0+$/, '');
   return frac ? `${whole}.${frac}` : whole;
-}
-
-function trimDecimals(v: number, decimals: number): string {
-  if (!Number.isFinite(v) || v <= 0) return '';
-  const fixed = v.toFixed(Math.min(decimals, 9));
-  return fixed.includes('.') ? fixed.replace(/0+$/, '').replace(/\.$/, '') : fixed;
 }
 
 function DetailRow({
@@ -205,62 +216,109 @@ export function SwapPanel({
   const inputToken = inputMint ? (byMint.get(inputMint) ?? null) : null;
   const outputToken = outputMint ? (byMint.get(outputMint) ?? null) : null;
 
-  const balances = useMemo(() => {
-    const m = new Map<string, number>();
-    // A wallet can hold more than one account for the same mint, so these are summed rather than
-    // last-wins — otherwise the displayed balance and MAX could disagree about the same token.
-    for (const b of tokenBalances ?? []) m.set(b.mint, (m.get(b.mint) ?? 0) + b.amount);
+  // One exact holding per mint, summed in raw base units across every account the wallet has for
+  // it. The Balance line, the MAX button and the sufficiency check all read this one number: they
+  // used to disagree, because the display summed the accounts while MAX filled from the largest.
+  const holdings = useMemo(() => {
+    const m = new Map<string, Holding>();
+    for (const b of tokenBalances ?? []) {
+      const prev = m.get(b.mint);
+      // Decimals belong to the mint, so two of its accounts cannot honestly disagree about them.
+      // If one does, it is skipped rather than added as though it were the same unit.
+      if (prev && prev.decimals !== b.decimals) continue;
+      m.set(b.mint, { raw: (prev?.raw ?? 0n) + safeBigInt(b.rawAmount), decimals: b.decimals });
+    }
     // Native COOK wins over any wrapped account carrying the same mint.
-    if (typeof cookBalance === 'number') m.set(COOK_MINT, cookBalance);
+    if (typeof cookBalance === 'number') {
+      m.set(COOK_MINT, {
+        raw: BigInt(Math.round(cookBalance * LAMPORTS_PER_COOK)),
+        decimals: COOK_DECIMALS,
+      });
+    }
     return m;
   }, [tokenBalances, cookBalance]);
+
+  /** The picker only sorts and labels rows, so a float is enough there. */
+  const balances = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const [mint, h] of holdings) m.set(mint, fromRawAmount(h.raw.toString(), h.decimals));
+    return m;
+  }, [holdings]);
 
   // An in-flight balance query is "unknown", not zero — see `exceedsBalance`, which must not
   // claim the wallet is short while the RPC is still answering.
   const balancesLoading = connected && (cookLoading || tokensLoading);
-  const inputBalance = inputToken ? (balances.get(inputToken.mint) ?? 0) : 0;
-  const outputBalance = outputToken ? (balances.get(outputToken.mint) ?? 0) : 0;
-  // COOK pays the fee for this very transaction, so the last 0.001 is never spendable.
-  const spendable =
-    inputToken?.mint === COOK_MINT ? Math.max(0, inputBalance - FEE_RESERVE_COOK) : inputBalance;
 
-  const maxAmountText = useMemo(() => {
-    if (!inputToken) return '';
-    if (inputToken.mint !== COOK_MINT) {
-      // The largest account, chosen deterministically — `find` would take an arbitrary one when
-      // the wallet holds several for this mint.
-      const account = (tokenBalances ?? [])
-        .filter((b) => b.mint === inputToken.mint)
-        .reduce<TokenBalance | null>((best, b) => (!best || b.amount > best.amount ? b : best), null);
-      // Exact when the account agrees with the registry; otherwise fall back to the float path.
-      if (account && account.decimals === inputToken.decimals) {
-        return rawToDecimalString(account.rawAmount, account.decimals);
-      }
-    }
-    return trimDecimals(spendable, inputToken.decimals);
-  }, [inputToken, tokenBalances, spendable]);
+  // The typed amount is parsed with the registry's decimals, so a holding recorded under different
+  // ones cannot be compared with it. Both describe the same mint; this only fires if Cookiescan's
+  // metadata has drifted from the chain.
+  const inputHolding = useMemo<Holding | null>(() => {
+    if (!inputToken) return null;
+    const h = holdings.get(inputToken.mint);
+    return h && h.decimals === inputToken.decimals ? h : null;
+  }, [holdings, inputToken]);
+
+  const inputBalanceRaw = inputHolding?.raw ?? 0n;
+  const inputBalance = inputHolding
+    ? fromRawAmount(inputBalanceRaw.toString(), inputHolding.decimals)
+    : 0;
+  const outputBalance = outputToken ? (balances.get(outputToken.mint) ?? 0) : 0;
+
+  // COOK pays for this very transaction and for the token accounts the router may open on the way
+  // through, so the reserve is never spendable. Held in raw units so the figure MAX fills is the
+  // same figure this check compares against, to the last base unit.
+  const spendableRaw =
+    inputToken?.mint === COOK_MINT
+      ? inputBalanceRaw > FEE_RESERVE_RAW
+        ? inputBalanceRaw - FEE_RESERVE_RAW
+        : 0n
+      : inputBalanceRaw;
+  const spendable = inputHolding
+    ? fromRawAmount(spendableRaw.toString(), inputHolding.decimals)
+    : 0;
+
+  /** What MAX fills: exact to the token's full precision, never a rounded float. */
+  const maxAmountText =
+    inputHolding && spendableRaw > 0n
+      ? rawToDecimalString(spendableRaw.toString(), inputHolding.decimals)
+      : '';
+  /** The same quantity the Balance line shows, unrounded — the line displays it as a tooltip. */
+  const exactBalanceText = inputHolding
+    ? rawToDecimalString(inputBalanceRaw.toString(), inputHolding.decimals)
+    : '';
 
   const rawAmount = inputToken ? toRawAmount(amount, inputToken.decimals) : null;
   const typed = amount.trim() !== '';
   const hasAmount = rawAmount !== null && rawAmount !== '0';
   const tooPrecise = typed && inputToken !== null && rawAmount === null;
   const amountNum = Number(amount);
+  // Compared in raw base units, so "Not enough" can never contradict the MAX button beside it.
   const exceedsBalance =
     connected &&
     !balancesLoading &&
-    hasAmount &&
-    Number.isFinite(amountNum) &&
-    amountNum > spendable + 1e-12;
+    rawAmount !== null &&
+    rawAmount !== '0' &&
+    safeBigInt(rawAmount) > spendableRaw;
   const samePair = inputMint !== null && inputMint === outputMint;
 
-  const { quote, noRoute, isQuoting, isRefreshing, error: quoteError, refetch } = useQuote({
-    inputMint,
-    outputMint,
-    amount,
-    inputDecimals: inputToken?.decimals ?? null,
-    slippageBps,
-    owner: address,
-  });
+  const { quote, noRoute, isQuoting, isRefreshing, isPaused, error: quoteError, refetch } =
+    useQuote({
+      inputMint,
+      outputMint,
+      amount,
+      inputDecimals: inputToken?.decimals ?? null,
+      slippageBps,
+      owner: address,
+      // "You receive" must not move while Nightly is open: the quote the user approves has to be
+      // the one they read. The 10s refresh resumes the moment the run reaches confirmed or failed.
+      paused: tx.pending,
+    });
+
+  // Result of the last build-time re-quote, tagged with the quote it was computed against. Read
+  // back only for that same quote, so a "matches your quote" confirmation can never outlive the
+  // quote it was about — no effect needed to expire it.
+  const [lastCheck, setLastCheck] = useState<{ quote: Quote; check: RouteCheck } | null>(null);
+  const routeCheck = lastCheck && lastCheck.quote === quote ? lastCheck.check : null;
 
   const outAmount = quote && outputToken ? fromRawAmount(quote.netOutAmount, outputToken.decimals) : null;
   const minOut = quote && outputToken ? fromRawAmount(quote.minOutAmount, outputToken.decimals) : null;
@@ -317,9 +375,14 @@ export function SwapPanel({
       setVisible(true);
       return;
     }
-    if (!inputToken || !outputToken || !rawAmount || !address) return;
+    if (!inputToken || !outputToken || !rawAmount || !address || !quote) return;
     const owner = address;
     const amountRaw = rawAmount;
+    // The quote as it stands at the click — the trade the user is agreeing to. It is frozen for the
+    // rest of the run, so this is also exactly what stays on screen behind the wallet.
+    const displayed = quote;
+    const out = { symbol: outputToken.symbol, decimals: outputToken.decimals };
+    setLastCheck(null);
 
     void tx.run({
       label: 'Swap',
@@ -334,6 +397,23 @@ export function SwapPanel({
           slippageBps,
           owner,
         });
+
+        // That re-quote can land on different pools at a different price, and the response says
+        // which — so the transaction about to be signed is checked against the quote on screen
+        // before it reaches the wallet. No extra request: `res.route` is already in this response.
+        const check = compareRoutes(displayed, res.route, slippageBps);
+        setLastCheck({ quote: displayed, check });
+        if (check.kind === 'refused') {
+          throw new PresentableError({
+            title: 'The route Cookiebox built is worse than the quote you saw.',
+            detail: describeRouteCheck(check, out),
+            logs: null,
+            // No Retry: the on-screen quote is now known to be stale, and it refreshes by itself as
+            // soon as this run settles. A retry against the old numbers would only be blocked again.
+            action: null,
+          });
+        }
+
         return {
           transaction: VersionedTransaction.deserialize(
             Buffer.from(res.transactionBase64, 'base64'),
@@ -380,8 +460,16 @@ export function SwapPanel({
             </span>
             {connected && inputToken ? (
               <div className="flex items-center gap-1.5 text-[11px] text-muted">
-                <span className="tabular-nums">
-                  Balance {balancesLoading ? '—' : formatAmount(inputBalance, 4)}{' '}
+                {/* Shown exactly whenever it fits — this is the same quantity MAX fills, less the
+                    COOK fee reserve. Past 12 characters it would push the Max button off a 360px
+                    row, so it falls back to a rounded figure with the exact one on the title. */}
+                <span className="tabular-nums" title={exactBalanceText || undefined}>
+                  Balance{' '}
+                  {balancesLoading
+                    ? '—'
+                    : exactBalanceText.length > 0 && exactBalanceText.length <= 12
+                      ? exactBalanceText
+                      : formatAmount(inputBalance, 4)}{' '}
                   {inputToken.symbol}
                 </span>
                 <button
@@ -613,7 +701,9 @@ export function SwapPanel({
           {exceedsBalance && inputToken ? (
             <p className="text-xs text-warn">
               {inputToken.mint === COOK_MINT
-                ? `Keep at least ${FEE_RESERVE_COOK} ${COOK_SYMBOL} for network fees — spendable ${formatAmount(spendable, 6)}.`
+                ? `Keep at least ${FEE_RESERVE_COOK} ${COOK_SYMBOL} back — the fee, plus rent for the ` +
+                  `two token accounts the router opens (${TOKEN_ACCOUNT_RENT_LAMPORTS.toLocaleString('en-US')} ` +
+                  `lamports each). Spendable ${formatAmount(spendable, 6)}.`
                 : `You hold ${formatAmount(inputBalance, 6)} ${inputToken.symbol}.`}
             </p>
           ) : null}
@@ -640,13 +730,17 @@ export function SwapPanel({
           {action.label}
         </Button>
 
-        <p className="mt-2 flex items-center justify-center gap-1.5 text-[11px] text-muted">
-          {isRefreshing ? (
+        <p className="mt-2 flex items-center justify-center gap-1.5 text-center text-[11px] text-muted">
+          {isPaused ? (
+            <PauseCircle size={11} aria-hidden="true" />
+          ) : isRefreshing ? (
             <Loader2 size={11} className="animate-spin" aria-hidden="true" />
           ) : (
             <RotateCw size={11} aria-hidden="true" />
           )}
-          Quotes refresh every 10s · routed by Cookiebox
+          {isPaused
+            ? 'Quote held while this transaction is in flight'
+            : 'Quotes refresh every 10s · routed by Cookiebox'}
         </p>
       </Card>
 
@@ -660,7 +754,7 @@ export function SwapPanel({
               hint="Cookiescan did not answer. Quotes need it to resolve decimals and symbols."
             />
           ) : quote ? (
-            <RouteDisplay quote={quote} byMint={byMint} />
+            <RouteDisplay quote={quote} byMint={byMint} check={routeCheck} />
           ) : isQuoting ? (
             <div className="space-y-2">
               <Skeleton className="h-7 w-48" />

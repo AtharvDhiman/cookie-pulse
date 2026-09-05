@@ -1,7 +1,7 @@
 import { PublicKey } from '@solana/web3.js';
 import { buildSwapTx } from '@/lib/cookiebox';
 import { errorResponse, NO_CACHE_HEADERS } from '@/lib/http';
-import { MAX_SLIPPAGE_BPS } from '@/lib/config';
+import { parseSlippageBps } from '@/lib/config';
 import { pick } from '@/lib/normalize';
 
 export const revalidate = 0;
@@ -37,10 +37,9 @@ export async function POST(request: Request) {
     return bad('owner is not a valid address');
   }
 
-  const requested = Number(pick(body, ['slippageBps']));
-  const slippageBps = Number.isFinite(requested)
-    ? Math.min(Math.max(Math.round(requested), 1), MAX_SLIPPAGE_BPS)
-    : 100;
+  // Same helper as /api/quote — see there for why `Number()` alone gave the two routes different
+  // answers for the same missing field.
+  const slippageBps = parseSlippageBps(pick(body, ['slippageBps']));
 
   try {
     const built = await buildSwapTx({ inputMint, outputMint, amount: rawAmount, slippageBps, owner });

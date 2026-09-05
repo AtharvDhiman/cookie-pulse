@@ -30,6 +30,20 @@ export function str(v: unknown): string | null {
   return typeof v === 'string' && v.length > 0 ? v : null;
 }
 
+/**
+ * A registry entry that is one indivisible edition rather than a fungible balance: 0 decimals and a
+ * total supply of exactly 1. Cookiescan's `/api/tokens` carries no interface field, so this is the
+ * only per-row signal available without a second index — and on 5 Sep 2026 it disagreed with the
+ * DAS index on none of the 6,473 mints (see NOTES.md), so the agreement is measured, not assumed.
+ *
+ * `/api/das` deliberately does not use this heuristic and must not start: it classifies a *wallet's*
+ * assets, where a freshly created fungible mint can legitimately sit at supply 1 with nothing to
+ * cross-check it against.
+ */
+export function isNftLike(t: { decimals: number; supply: number }): boolean {
+  return t.decimals === 0 && t.supply === 1;
+}
+
 /** Reads a nested path without throwing on missing intermediates. */
 export function pick(obj: unknown, path: string[]): unknown {
   let cur: unknown = obj;

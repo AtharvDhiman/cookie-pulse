@@ -30,15 +30,38 @@ function check(label: string, ok: boolean, detail: string): void {
   }
 }
 
-async function getJson(path: string): Promise<{ status: number; body: unknown; ms: number }> {
+async function getJson(
+  path: string,
+): Promise<{ status: number; body: unknown; ms: number; bytes: number }> {
   const started = Date.now();
   const res = await fetch(`${BASE}${path}`);
-  const body = await res.json().catch(() => null);
-  return { status: res.status, body, ms: Date.now() - started };
+  // Read as text first: the uncompressed payload size is itself something this script asserts.
+  const text = await res.text();
+  let body: unknown = null;
+  try {
+    body = JSON.parse(text) as unknown;
+  } catch {
+    body = null;
+  }
+  return { status: res.status, body, ms: Date.now() - started, bytes: Buffer.byteLength(text) };
 }
 
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null;
+}
+
+/** The mints in a registry payload that carry a real USD price, sorted so two views can be compared. */
+function pricedMints(body: unknown): string[] {
+  const rows = isRecord(body) && Array.isArray(body.tokens) ? body.tokens : [];
+  return rows
+    .filter((t) => isRecord(t) && typeof t.priceUsd === 'number' && t.priceUsd > 0)
+    .map((t) => String((t as Record<string, unknown>).mint))
+    .sort();
+}
+
+function envelopeCount(body: unknown, key: string): number | null {
+  const v = isRecord(body) ? body[key] : null;
+  return typeof v === 'number' && Number.isFinite(v) ? v : null;
 }
 
 async function main(): Promise<void> {
@@ -73,8 +96,83 @@ async function main(): Promise<void> {
     'string prices coerced by num()',
   );
 
-  const priced = tokenList.filter((t) => isRecord(t) && typeof t.priceUsd === 'number' && t.priceUsd > 0);
-  console.log(`  ${DIM}note  ${priced.length} of ${tokenList.length} tokens carry a USD price${RESET}`);
+  // --- registry projection ------------------------------------------------------------------------
+  // The default response is a projection: priced rows only, no `metadata.description`. Everything
+  // here guards the one way that can go wrong — the app reporting the projection as if it were the
+  // registry. The denominator every surface renders comes from `count`, so `count` must stay equal
+  // to the true upstream size in BOTH views, and must never be the length of the row array.
+  console.log('\nGET /api/tokens  (projection)');
+  const defaultCount = envelopeCount(tokens.body, 'count');
+  const fungible = envelopeCount(tokens.body, 'fungibleCount');
+  const nftLike = envelopeCount(tokens.body, 'nftLikeCount');
+
+  // Nothing caps the row count — capping would drop priced mints from the screener. 120 is headroom
+  // over the ~92 mints that carry a price today; if this trips, the chain grew and the budget needs
+  // a second look, not a slice.
+  check(
+    'default view is projected and within budget',
+    tokenList.length <= 120 && tokens.bytes < 60_000,
+    `${tokenList.length} rows (budget 120), ${(tokens.bytes / 1024).toFixed(1)} KB uncompressed (budget 60)`,
+  );
+  check(
+    'default view drops metadata.description',
+    tokenList.every((t) => !isRecord(t) || t.description === null),
+    'every projected row has description: null',
+  );
+  check(
+    'envelope count exceeds the rows returned',
+    defaultCount !== null && defaultCount > tokenList.length,
+    `count=${defaultCount} vs ${tokenList.length} rows — a denominator taken from tokens.length would understate the registry by ${
+      defaultCount === null ? '?' : defaultCount - tokenList.length
+    }`,
+  );
+  check(
+    'composition counts sum to the envelope count',
+    fungible !== null && nftLike !== null && defaultCount !== null && fungible + nftLike === defaultCount,
+    `${fungible} fungible + ${nftLike} NFT editions = ${defaultCount}`,
+  );
+
+  console.log('\nGET /api/tokens?view=full  (the show-all path)');
+  const full = await getJson('/api/tokens?view=full');
+  check('responds 200', full.status === 200, `${full.status} in ${full.ms}ms, ${(full.bytes / 1024 / 1024).toFixed(2)} MB`);
+  const fullList = isRecord(full.body) && Array.isArray(full.body.tokens) ? full.body.tokens : [];
+  const fullCount = envelopeCount(full.body, 'count');
+  check(
+    'full view returns every registry entry',
+    fullCount !== null && fullList.length === fullCount,
+    `${fullList.length} rows = count ${fullCount} — no unpriced token silently dropped`,
+  );
+  check(
+    'both views report the same envelope count',
+    defaultCount !== null && defaultCount === fullCount,
+    `default ${defaultCount} · full ${fullCount}`,
+  );
+  check(
+    'both views agree on the composition split',
+    fungible === envelopeCount(full.body, 'fungibleCount') &&
+      nftLike === envelopeCount(full.body, 'nftLikeCount'),
+    `${fungible} fungible · ${nftLike} NFT editions`,
+  );
+
+  // The two paths derive their rows from the same upstream body but through different code; if they
+  // ever disagree on which mints are priced, the screener shows one set and ranks against another.
+  const defaultPriced = pricedMints(tokens.body);
+  const fullPriced = pricedMints(full.body);
+  check(
+    'priced subset is identical in both views',
+    defaultPriced.length === fullPriced.length &&
+      defaultPriced.every((mint, i) => mint === fullPriced[i]),
+    `${defaultPriced.length} priced mints in the default view · ${fullPriced.length} in the full view`,
+  );
+  check(
+    'the default view is exactly the priced subset',
+    defaultPriced.length === tokenList.length,
+    `${tokenList.length} rows, all priced`,
+  );
+
+  console.log(
+    `  ${DIM}note  ${defaultPriced.length} priced · ${fungible} fungible mints · ${nftLike} NFT editions · ${defaultCount} entries${RESET}`,
+  );
 
   // --- /api/markets -----------------------------------------------------------------------------
   console.log('\nGET /api/markets');

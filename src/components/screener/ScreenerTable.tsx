@@ -35,9 +35,10 @@ interface Column {
 }
 
 /**
- * The registry reports 0 — not null — for the 6378 tokens with no price feed, and a token with a
+ * The registry reports 0 — not null — for the ~6,380 entries with no price feed, and a mint with a
  * feed is never worth exactly $0. So 0 means "unknown" here: it renders as — and sorts last in both
- * directions, matching what the "Show unpriced" filter already calls unpriced.
+ * directions, matching what the "Show unpriced" filter already calls unpriced. Only reachable once
+ * that filter is on: the default view is served pre-projected to the priced rows.
  */
 function priceOf(t: Token): number | null {
   return t.priceUsd !== null && t.priceUsd > 0 ? t.priceUsd : null;

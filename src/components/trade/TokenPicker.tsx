@@ -138,6 +138,12 @@ export function TokenPicker({ label, token, tokens, balances, loading, disabled,
         onClick={() => setOpen(true)}
         disabled={disabled}
         aria-haspopup="dialog"
+        // Two tokens can share a symbol (there are two "MON"s), so the name carries the mint too.
+        aria-label={
+          token
+            ? `Token to ${label}: ${token.symbol}, ${shortAddr(token.mint)}. Change token`
+            : `Select token to ${label}`
+        }
         className={cn(
           'flex shrink-0 items-center gap-1.5 rounded-full border border-hairline/10 bg-surface2 py-1.5 pl-1.5 pr-2.5',
           'text-sm font-semibold transition-colors hover:border-accent/50 disabled:cursor-not-allowed disabled:opacity-50',

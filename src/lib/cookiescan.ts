@@ -10,6 +10,12 @@ function toToken(raw: unknown): Token | null {
   const mint = str(pick(raw, ['mint']));
   if (!mint) return null;
   const decimals = num(pick(raw, ['metadata', 'decimals']));
+
+  // Cookiescan emits `change24h: 0` for BOTH "did not move" and "no 24h window indexed", and on
+  // 5 Sep 2026 only 3 of 6470 tokens had a non-zero value — so an exact 0 is the indexer's default,
+  // not a measurement. Surfaced as null so the UI renders a dash instead of a fabricated +0.00%.
+  // `volume24h` gets no such treatment: 0 there genuinely means no trades.
+  const change = num(pick(raw, ['price', 'change24h']));
   return {
     mint,
     name: str(pick(raw, ['metadata', 'name'])) ?? 'Unknown token',
@@ -21,7 +27,7 @@ function toToken(raw: unknown): Token | null {
     // `price.usd` arrives as a string for ~1% of the registry — `num` coerces both forms.
     priceUsd: num(pick(raw, ['price', 'usd'])),
     priceNative: num(pick(raw, ['price', 'native'])),
-    change24h: num(pick(raw, ['price', 'change24h'])),
+    change24h: change === 0 ? null : change,
     volume24h: num0(pick(raw, ['marketData', 'volume24h'])),
     liquidityUsd: num0(pick(raw, ['marketData', 'liquidity'])),
     marketCap: num0(pick(raw, ['marketData', 'marketCap'])),

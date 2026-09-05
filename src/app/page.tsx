@@ -41,9 +41,9 @@ function CardHeading({ title, cta }: { title: string; cta: string }) {
 function CookPriceCard() {
   const { cookUsd, byMint, count, isLoading, isError } = useRegistry();
 
-  // A flat or missing 24h change renders as an em dash — never a fabricated +0.00%.
-  const raw = byMint.get(COOK_MINT)?.change24h ?? null;
-  const change24h = raw === null || raw === 0 ? null : raw;
+  // `toToken` already maps the indexer's default 0 to null, so this renders an em dash rather than
+  // a fabricated +0.00% whenever Cookiescan has no 24h window for COOK.
+  const change24h = byMint.get(COOK_MINT)?.change24h ?? null;
 
   return (
     <Card as="section" className="overflow-hidden">

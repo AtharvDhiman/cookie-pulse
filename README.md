@@ -198,6 +198,60 @@ of `3863.45` USD. Full working in [`NOTES.md`](NOTES.md).
 
 ---
 
+## Wallet test checklist
+
+Everything that does not need a signature is verified: 19/19 API smoke checks pass against live
+services, and `tsc`, `eslint` and `next build` are all clean. The signature paths are written to be
+correct by construction but have **not** been run against a funded wallet. This is what to try, in
+order — total cost is a fraction of a cent.
+
+**Setup**
+- [ ] Nightly installed, Cookie Chain RPC added (Settings → Networks → Solana), a little COOK bridged in.
+
+**Connect**
+- [ ] Nightly appears first in the wallet modal and connects.
+- [ ] Header shows the truncated address, copy button, Cookiescan link and live COOK balance.
+- [ ] The chain-status dot is green and the latency reads plausibly.
+- [ ] Disconnect and reconnect cleanly.
+
+**Send — the simplest real transaction, do this first**
+- [ ] Send `0.001` COOK to your own address. Toast walks Building → Approve in Nightly → Simulating →
+      Sending → Confirming → Confirmed, then links to Cookiescan.
+- [ ] Open the link; the transaction is there and succeeded.
+- [ ] Add a memo and send again — confirm the memo shows on the explorer.
+- [ ] Press MAX on COOK: it must leave 0.001 COOK behind, not empty the wallet.
+- [ ] Reject the signature in Nightly → "Transaction cancelled in Nightly."
+- [ ] Paste a malformed address → inline "Not a valid address", button stays disabled.
+- [ ] If you hold any SPL token, send a small amount to a **fresh** address (this exercises the
+      idempotent ATA create). Check the recipient's balance on Cookiescan.
+
+**Trade — the highest-risk path**
+- [ ] `/trade` pre-fills COOK → the top-volume token. A quote appears within ~1s and refreshes.
+- [ ] The route panel shows venue, pool and split; min received and fee are populated.
+- [ ] Swap ~0.05 COOK. Sign in Nightly → confirmed toast → Cookiescan link resolves.
+- [ ] Balances in the header and `/portfolio` update on their own after it confirms.
+- [ ] Set slippage to 0.5% on a thin pair and try to trigger the slippage error → should read
+      "Price moved more than your slippage" with a button that raises it to 3%.
+- [ ] Deep link works: `/trade?in=So11111111111111111111111111111111111111112&out=<some mint>`.
+
+**Portfolio**
+- [ ] COOK balance, every SPL and Token-2022 balance, and the USD total look right.
+- [ ] Token-2022 holdings carry the Token-2022 pill.
+- [ ] The last 20 transactions list with fees and working explorer links.
+- [ ] Refresh button updates without a page reload.
+
+**Zero-COOK path** (use a second, empty wallet)
+- [ ] The amber "No COOK in this wallet" banner appears on every page and links to `/bridge`.
+- [ ] Attempting a swap surfaces "Not enough COOK to pay fees." with a `/bridge` link.
+
+**Presentation**
+- [ ] All six routes at 360px wide — no sideways scrolling of the page itself.
+- [ ] Light/dark toggle on every route.
+- [ ] Capture `docs/screenshots/{overview,screener,trade,portfolio}.png` for the README.
+
+> If something fails, the fastest useful report is: **which page, what you clicked, the exact toast
+> text, and the browser console error.**
+
 ## Tech
 
 Next.js 15 (App Router) · TypeScript strict · Tailwind · `@solana/web3.js` v1 · `@solana/spl-token` ·

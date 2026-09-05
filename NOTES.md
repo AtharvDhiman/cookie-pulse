@@ -63,6 +63,19 @@ Of 6470 registry tokens, on 5 Sep 2026:
 - **3** have non-zero 24h volume (MON, COOKHOUSE, bCOOK)
 - **3** have a non-zero 24h change
 
+### `change24h: 0` means "no data", not "flat"
+
+Cookiescan returns `price.change24h = 0` both for a token that genuinely did not move and for one it
+has no 24h window for. With 6,467 of 6,470 sitting at exactly `0.000000` and only three carrying a
+real value, an exact zero is plainly the indexer's default rather than a measurement.
+
+Rendering it literally would have printed a confident **`+0.00%`** on 89 of the 92 priced rows in the
+screener — a fabricated number on nearly every line. So `toToken()` maps an exact `0` to `null`, and
+the UI shows an em dash. Verified after the change: 3 tokens carry a value (bCOOK −1.15%,
+COOKHOUSE −14.40%, MON −7.95%), 6,467 are null, and no row reports a zero.
+
+`volume24h` gets no such treatment — `0` there genuinely means no trades.
+
 Consequences, all handled in the UI rather than papered over:
 
 1. **Top gainers / losers tiles** can only ever show ~3 rows. They render whatever exists and show a
@@ -94,7 +107,10 @@ Consequences, all handled in the UI rather than papered over:
   uses `"cookiebox-damm"`. Route display normalizes the aggregator's form for readability.
 - Live venues on the markets feed: COOKIESWAP CPAMM (96), COOKIEBOX DAMM (28), COOKIESWAP SAMM (23),
   COOKIEBOX CLMM (11), METEORA DAMM (2). Note **CPAMM/SAMM** appear, which the brief's program-id
-  list does not name, and **BAMM/xYBN do not currently appear**.
+  list does not name, and **BAMM/xYBN own no pools in the markets feed**. They are still polled for
+  the Activity panel and do produce transactions — xYBN signatures showed up during testing — so the
+  two feeds disagree because they measure different things (pools vs. program activity), not because
+  either is wrong.
 
 ## Deliberate choices
 
@@ -124,3 +140,38 @@ Consequences, all handled in the UI rather than papered over:
   unreachable. A clear error is shown instead.
 - **`logsSubscribe` over WebSocket is not used.** Polling `getSignaturesForAddress` every 8 s is
   verified working; the WS path was left out rather than shipped half-tested.
+
+## Visual design
+
+The look follows a reference the user supplied (Barly Design's "Nexus — Web3 — Homepage" on
+Dribbble): near-black ground, a warm orange radial glow, translucent glass cards, and large display
+type with an inline gradient accent phrase.
+
+One deliberate departure. That reference is a **marketing homepage**; five of these six routes are
+dense data surfaces, and "analytics, charts, dashboards" is a judged criterion. A hero treatment
+applied wholesale would have cost legibility on exactly the screens being judged. So the *visual
+language* is applied everywhere — tokens, glass, gradient accent, type scale, radii, themed
+scrollbars — while the hero band exists only on `/`, above the dashboard rather than in place of it.
+Its four stat chips read from the same React Query caches as the cards below, so it cannot drift out
+of sync.
+
+Implementation notes:
+
+- Both palettes are defined explicitly on `:root` and `.light`. No colour is defined only inside a
+  media query, so the toggle wins in both directions.
+- The ambient glow is a fixed, `pointer-events: none`, negative-z-index layer, with the body marked
+  `isolate` so it cannot escape its stacking context.
+- `Card` has two variants: `glass` (translucent, blurred) for chrome, and `solid` for dense tables
+  where a blurred backdrop hurts readability.
+- Fonts are self-hosted through `next/font` (Sora display, Inter UI, JetBrains Mono), so there is no
+  render-blocking request to `fonts.googleapis.com` and no layout shift.
+
+## Verification performed
+
+- **19/19 API smoke checks** green against live services (`npm run smoke`).
+- **`tsc --noEmit`, `eslint`, `next build`** all clean; all six routes return HTTP 200.
+- **Rendered and inspected in-browser** at 400px and 880px, in dark and light: no horizontal page
+  scroll (`maxScrollX === 0` at a native 400px viewport), screener reports "92 of 6,470 tokens",
+  bCOOK liquidity renders `$3.74K` (it would have been `$0.46` under the brief's COOK assumption),
+  and the activity feed lists real signatures from Cookiebox DAMM and Cookieswap xYBN.
+- **Not verified:** anything requiring a signature. See the wallet test checklist in the README.

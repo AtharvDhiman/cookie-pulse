@@ -61,7 +61,7 @@ export function WalletButton() {
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
         aria-haspopup="menu"
-        className="flex items-center gap-2 rounded-lg border border-rule bg-surface2 px-2.5 py-2 text-xs font-medium transition-colors hover:border-accent/50 sm:text-sm"
+        className="flex items-center gap-2 rounded-xl border border-hairline/10 bg-surface2 px-2.5 py-2 text-xs font-medium transition-colors hover:border-accent/50 sm:text-sm"
       >
         <span className="hidden tabular-nums text-ink2 sm:inline">
           {balanceLoading ? '…' : `${formatAmount(balance ?? 0, 4)} ${COOK_SYMBOL}`}
@@ -74,7 +74,7 @@ export function WalletButton() {
       {open ? (
         <div
           role="menu"
-          className="absolute right-0 z-40 mt-2 w-64 animate-fade-in rounded-xl border border-rule bg-surface p-3 shadow-xl"
+          className="absolute right-0 z-40 mt-2 w-64 animate-fade-in rounded-xl border border-hairline/10 bg-surface p-3 shadow-xl"
         >
           <p className="text-[10px] font-semibold uppercase tracking-wider text-muted">Connected</p>
           <div className="mt-1 flex items-center justify-between gap-1">
@@ -84,7 +84,7 @@ export function WalletButton() {
             <CopyButton value={address} label="address" />
           </div>
 
-          <div className="mt-3 flex items-baseline justify-between border-t border-rule pt-3">
+          <div className="mt-3 flex items-baseline justify-between border-t border-hairline/10 pt-3">
             <span className="text-xs text-muted">Balance</span>
             <span className="tabular-nums text-sm font-semibold">
               {balanceLoading ? '…' : `${formatAmount(balance ?? 0, 6)} ${COOK_SYMBOL}`}
@@ -95,14 +95,14 @@ export function WalletButton() {
             href={explorerAddress(address)}
             target="_blank"
             rel="noopener noreferrer"
-            className="mt-3 flex items-center gap-2 rounded-lg px-2 py-2 text-xs text-ink2 transition-colors hover:bg-surface2 hover:text-ink"
+            className="mt-3 flex items-center gap-2 rounded-xl px-2 py-2 text-xs text-ink2 transition-colors hover:bg-surface2 hover:text-ink"
           >
             <ExternalLink size={14} /> View on Cookiescan
           </a>
           <button
             type="button"
             onClick={onDisconnect}
-            className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-xs text-down transition-colors hover:bg-down/10"
+            className="flex w-full items-center gap-2 rounded-xl px-2 py-2 text-xs text-down transition-colors hover:bg-down/10"
           >
             <LogOut size={14} /> Disconnect
           </button>

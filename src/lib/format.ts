@@ -8,8 +8,19 @@ export function formatUsd(v: number | null | undefined, opts?: { compact?: boole
   if (opts?.compact && abs >= 1000) return `$${compact(v)}`;
   if (abs >= 1) return `$${v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   if (abs >= 0.01) return `$${v.toFixed(4)}`;
-  // Sub-cent: keep 4 significant digits so 0.000000384857 stays readable.
-  return `$${v.toPrecision(4).replace(/e[-+]\d+$/, (m) => m)}`;
+  // Sub-cent, which is most of this registry (prices reach 7.2e-9). `toPrecision` would emit
+  // exponential notation below 1e-6 and render as "$3.849e-7", so widen toFixed to keep 4
+  // significant digits in plain decimal instead.
+  const decimals = Math.min(18, Math.max(4, -Math.floor(Math.log10(abs)) + 3));
+  return `$${trimZeros(v.toFixed(decimals))}`;
+}
+
+/** Drops trailing zeros left by a wide toFixed, keeping at least two decimal places. */
+function trimZeros(s: string): string {
+  if (!s.includes('.')) return s;
+  const trimmed = s.replace(/0+$/, '');
+  const [whole, frac = ''] = trimmed.split('.');
+  return frac.length >= 2 ? `${whole}.${frac}` : `${whole}.${frac.padEnd(2, '0')}`;
 }
 
 export function compact(v: number | null | undefined): string {

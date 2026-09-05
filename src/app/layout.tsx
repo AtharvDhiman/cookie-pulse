@@ -1,42 +1,76 @@
 import type { Metadata, Viewport } from 'next';
+import { Inter, Sora, JetBrains_Mono } from 'next/font/google';
 import { Toaster } from 'sonner';
 import { CookieWalletProvider } from '@/providers/WalletProvider';
 import { QueryProvider } from '@/providers/QueryProvider';
 import { ThemeProvider } from '@/providers/ThemeProvider';
 import { Header } from '@/components/Header';
+import { Footer } from '@/components/Footer';
 import { ZeroCookBanner } from '@/components/ZeroCookBanner';
 import './globals.css';
 
+// Self-hosted by next/font, so there is no render-blocking request to fonts.googleapis.com and no
+// layout shift. Sora carries the display headings, Inter the UI, JetBrains Mono the addresses.
+const sans = Inter({ subsets: ['latin'], variable: '--font-sans', display: 'swap' });
+const display = Sora({
+  subsets: ['latin'],
+  weight: ['600', '700', '800'],
+  variable: '--font-display',
+  display: 'swap',
+});
+const mono = JetBrains_Mono({
+  subsets: ['latin'],
+  weight: ['400', '500'],
+  variable: '--font-mono',
+  display: 'swap',
+});
+
+const TITLE = 'Cookie Pulse — watch the chain, trade the chain';
+const DESCRIPTION =
+  'Analytics and trade terminal for Cookie Chain: live chain health, a 6,000-token screener, portfolio, and swaps routed through the Cookiebox aggregator.';
+
 export const metadata: Metadata = {
-  title: 'Cookie Pulse — watch the chain, trade the chain',
-  description:
-    'Analytics and trade terminal for Cookie Chain: token screener, portfolio, swaps via Cookiebox, and a live activity feed.',
+  title: TITLE,
+  description: DESCRIPTION,
+  applicationName: 'Cookie Pulse',
+  openGraph: { title: TITLE, description: DESCRIPTION, type: 'website', siteName: 'Cookie Pulse' },
+  twitter: { card: 'summary_large_image', title: TITLE, description: DESCRIPTION },
 };
 
 export const viewport: Viewport = {
-  themeColor: '#0e1015',
+  themeColor: '#08090c',
   width: 'device-width',
   initialScale: 1,
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <body className="min-h-screen bg-ground text-ink antialiased">
+    <html
+      lang="en"
+      suppressHydrationWarning
+      className={`${sans.variable} ${display.variable} ${mono.variable}`}
+    >
+      {/* `isolate` gives the ambient layer a stacking context to sit behind without escaping. */}
+      <body className="isolate flex min-h-screen flex-col bg-ground text-ink antialiased">
+        <div className="ambient" aria-hidden="true" />
         <ThemeProvider>
           <QueryProvider>
             <CookieWalletProvider>
               <a
                 href="#main"
-                className="sr-only focus:not-sr-only focus:absolute focus:left-3 focus:top-3 focus:z-50 focus:rounded-md focus:bg-accent focus:px-3 focus:py-2 focus:text-sm focus:font-semibold focus:text-accent-ink"
+                className="sr-only focus:not-sr-only focus:absolute focus:left-3 focus:top-3 focus:z-50 focus:rounded-xl focus:bg-accent focus:px-3 focus:py-2 focus:text-sm focus:font-semibold focus:text-accent-ink"
               >
                 Skip to content
               </a>
               <Header />
               <ZeroCookBanner />
-              <main id="main" className="mx-auto w-full max-w-[1240px] px-3 pb-16 pt-4 sm:px-5">
+              <main
+                id="main"
+                className="mx-auto w-full max-w-[1280px] flex-1 px-3 pb-20 pt-4 sm:px-6"
+              >
                 {children}
               </main>
+              <Footer />
               <Toaster
                 position="bottom-right"
                 closeButton
@@ -45,7 +79,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                   style: {
                     background: 'rgb(var(--surface))',
                     color: 'rgb(var(--ink))',
-                    border: '1px solid rgb(var(--rule))',
+                    border: '1px solid rgb(var(--hairline) / var(--hairline-alpha))',
+                    boxShadow: 'var(--shadow-lift)',
                   },
                 }}
               />

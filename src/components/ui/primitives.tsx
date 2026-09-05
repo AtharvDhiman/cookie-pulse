@@ -8,17 +8,45 @@ export function cn(...parts: (string | false | null | undefined)[]): string {
   return parts.filter(Boolean).join(' ');
 }
 
+/**
+ * The app's one panel. `glass` is translucent with a blurred backdrop — right over the ambient
+ * glow; `solid` is opaque, for dense data surfaces where translucency costs legibility.
+ */
 export function Card({
   children,
   className,
+  variant = 'glass',
   as: Tag = 'div',
 }: {
   children: ReactNode;
   className?: string;
-  as?: 'div' | 'section' | 'article';
+  variant?: 'glass' | 'solid';
+  as?: 'div' | 'section' | 'article' | 'aside';
 }) {
   return (
-    <Tag className={cn('rounded-xl border border-rule bg-surface', className)}>{children}</Tag>
+    <Tag
+      className={cn(
+        'rounded-2xl',
+        variant === 'glass' ? 'glass' : 'glass-solid',
+        className,
+      )}
+    >
+      {children}
+    </Tag>
+  );
+}
+
+/** Small uppercase label above a section — the reference leans on these heavily. */
+export function Eyebrow({ children, className }: { children: ReactNode; className?: string }) {
+  return (
+    <p
+      className={cn(
+        'text-[10px] font-semibold uppercase tracking-[0.14em] text-muted',
+        className,
+      )}
+    >
+      {children}
+    </p>
   );
 }
 
@@ -28,16 +56,16 @@ export function Skeleton({ className }: { className?: string }) {
       className={cn('relative overflow-hidden rounded-md bg-surface2', className)}
       aria-hidden="true"
     >
-      <div className="absolute inset-0 -translate-x-full animate-shimmer bg-gradient-to-r from-transparent via-white/5 to-transparent" />
+      <div className="absolute inset-0 -translate-x-full animate-shimmer bg-gradient-to-r from-transparent via-white/[0.06] to-transparent" />
     </div>
   );
 }
 
 export function EmptyState({ title, hint }: { title: string; hint?: string }) {
   return (
-    <div className="flex flex-col items-center justify-center gap-1 px-4 py-10 text-center">
-      <p className="text-sm font-medium text-ink2">{title}</p>
-      {hint ? <p className="max-w-sm text-xs text-muted">{hint}</p> : null}
+    <div className="flex flex-col items-center justify-center gap-1.5 px-4 py-12 text-center">
+      <p className="text-sm font-semibold text-ink2">{title}</p>
+      {hint ? <p className="max-w-sm text-xs leading-relaxed text-muted">{hint}</p> : null}
     </div>
   );
 }
@@ -50,11 +78,11 @@ export function Pill({
   tone?: 'muted' | 'accent' | 'up' | 'down' | 'warn';
 }) {
   const tones = {
-    muted: 'bg-surface2 text-muted border-rule',
-    accent: 'bg-accent/15 text-accent border-accent/30',
-    up: 'bg-up/15 text-up border-up/30',
-    down: 'bg-down/15 text-down border-down/30',
-    warn: 'bg-warn/15 text-warn border-warn/30',
+    muted: 'bg-surface2 text-muted border-hairline/10',
+    accent: 'bg-accent/12 text-accent border-accent/25',
+    up: 'bg-up/12 text-up border-up/25',
+    down: 'bg-down/12 text-down border-down/25',
+    warn: 'bg-warn/12 text-warn border-warn/25',
   } as const;
   return (
     <span
@@ -68,7 +96,7 @@ export function Pill({
   );
 }
 
-/** Signed percentage, coloured up/down. Renders a dash when the value is unknown. */
+/** Signed percentage, coloured up/down. A dash when the value is genuinely unknown. */
 export function Change({ value, className }: { value: number | null; className?: string }) {
   if (value === null || !Number.isFinite(value)) {
     return <span className={cn('text-muted', className)}>—</span>;
@@ -102,7 +130,7 @@ export function CopyButton({
     try {
       await navigator.clipboard.writeText(value);
     } catch {
-      return; // Clipboard blocked (insecure context) — stay silent rather than showing a fake tick.
+      return; // Clipboard blocked (insecure context) — better silent than a lying tick.
     }
     setCopied(true);
     setTimeout(() => setCopied(false), 1400);
@@ -114,7 +142,7 @@ export function CopyButton({
       onClick={copy}
       aria-label={label ? `Copy ${label}` : `Copy ${value}`}
       className={cn(
-        'inline-flex shrink-0 items-center gap-1 rounded-md px-1.5 py-1 text-muted transition-colors hover:bg-surface2 hover:text-ink',
+        'inline-flex shrink-0 items-center gap-1 rounded-xl px-1.5 py-1 text-muted transition-colors hover:bg-surface2 hover:text-ink',
         className,
       )}
     >
@@ -124,7 +152,7 @@ export function CopyButton({
   );
 }
 
-/** Token logo with an initials fallback — 1500 of 6470 registry entries have no logo. */
+/** Token logo with an initials fallback — 1,500 of 6,470 registry entries have no logo. */
 export function TokenLogo({
   logo,
   symbol,
@@ -141,7 +169,7 @@ export function TokenLogo({
     return (
       <span
         style={px}
-        className="flex shrink-0 items-center justify-center rounded-full bg-surface2 text-[9px] font-bold text-muted ring-1 ring-rule"
+        className="flex shrink-0 items-center justify-center rounded-full bg-surface2 text-[9px] font-bold text-muted ring-1 ring-hairline/10"
       >
         {initials(symbol)}
       </span>
@@ -154,7 +182,7 @@ export function TokenLogo({
       style={px}
       loading="lazy"
       onError={() => setBroken(true)}
-      className="shrink-0 rounded-full bg-surface2 object-cover ring-1 ring-rule"
+      className="shrink-0 rounded-full bg-surface2 object-cover ring-1 ring-hairline/10"
     />
   );
 }
@@ -167,9 +195,19 @@ export function StatusDot({ status }: { status: 'operational' | 'degraded' | 'do
     unknown: 'bg-muted',
   } as const;
   return (
-    <span
-      className={cn('inline-block h-2 w-2 shrink-0 rounded-full', tone[status])}
-      aria-hidden="true"
-    />
+    <span className="relative flex h-2 w-2 shrink-0" aria-hidden="true">
+      {/* A soft halo makes the live state readable at a glance without adding a label. */}
+      <span
+        className={cn('absolute inline-flex h-full w-full rounded-full opacity-40', tone[status])}
+        style={{ filter: 'blur(3px)' }}
+      />
+      <span
+        className={cn(
+          'relative inline-flex h-2 w-2 rounded-full',
+          tone[status],
+          status === 'operational' && 'animate-pulse-dot',
+        )}
+      />
+    </span>
   );
 }

@@ -81,7 +81,7 @@ const STEPS: Step[] = [
 
 function ValueRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-center justify-between gap-2 rounded-lg border border-rule bg-surface2 px-3 py-2">
+    <div className="flex items-center justify-between gap-2 rounded-xl border border-hairline/10 bg-surface2 px-3 py-2">
       <div className="min-w-0">
         <p className="text-[10px] font-semibold uppercase tracking-wider text-muted">{label}</p>
         <p className="truncate font-mono text-xs text-ink2" title={value}>
@@ -97,7 +97,7 @@ export default function BridgePage() {
   return (
     <div className="mx-auto max-w-3xl py-4">
       <header className="mb-6">
-        <h1 className="text-2xl font-extrabold tracking-tight sm:text-3xl">How to get COOK</h1>
+        <h1 className="font-display text-[26px] font-extrabold leading-tight tracking-tightest sm:text-[34px]">How to get COOK</h1>
         <p className="mt-2 max-w-prose text-sm text-ink2">
           Cookie Chain is mainnet-only — there is no faucet and no devnet, so every transaction
           spends real COOK. Four steps to fund a wallet from scratch.
@@ -109,11 +109,11 @@ export default function BridgePage() {
           <li key={step.n}>
             <Card className="p-4 sm:p-5">
               <div className="flex gap-3 sm:gap-4">
-                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent text-xs font-bold text-accent-ink">
+                <span className="accent-gradient flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold text-accent-ink shadow-[0_6px_16px_-8px_rgb(var(--accent-glow)/0.8)]">
                   {step.n}
                 </span>
                 <div className="min-w-0 flex-1">
-                  <h2 className="text-base font-bold tracking-tight">{step.title}</h2>
+                  <h2 className="font-display text-base font-bold tracking-tight">{step.title}</h2>
                   <p className="mt-1 text-sm leading-relaxed text-ink2">{step.body}</p>
 
                   {step.values ? (
@@ -149,13 +149,13 @@ export default function BridgePage() {
         <div className="flex gap-2">
           <Link
             href="/trade"
-            className="rounded-lg bg-accent px-3 py-2 text-xs font-semibold text-accent-ink hover:brightness-110"
+            className="accent-gradient rounded-xl px-3 py-2 text-xs font-semibold text-accent-ink shadow-[0_8px_22px_-10px_rgb(var(--accent-glow)/0.7)] hover:brightness-110"
           >
             Make a swap
           </Link>
           <Link
             href="/portfolio"
-            className="rounded-lg border border-rule bg-surface2 px-3 py-2 text-xs font-semibold hover:border-accent/50"
+            className="rounded-xl border border-hairline/10 bg-surface2 px-3 py-2 text-xs font-semibold hover:border-accent/50"
           >
             View portfolio
           </Link>

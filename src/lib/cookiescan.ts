@@ -87,6 +87,38 @@ async function registryBody(): Promise<unknown> {
  * (verified 5 Sep 2026), so the projection has to happen here. What it saves is the browser's
  * share: 2.7 MB down to ~35 KB.
  */
+/**
+ * Identity for a named set of mints, whatever their price.
+ *
+ * The priced projection is the right default for every ranking surface, but it is a price feed, not
+ * a directory — and a wallet can hold, or a deep link can name, a mint that has no price. Those
+ * surfaces need a symbol, a name and a logo, and the alternative to this is shipping the 2.7 MB full
+ * view to a phone to look up a handful of rows. Upstream is already memoised server-side, so this
+ * costs a filter and returns a few hundred bytes.
+ *
+ * The envelope's registry-wide counts are unchanged, because they describe the registry rather than
+ * whatever subset was asked for.
+ */
+export async function fetchTokensByMint(mints: string[]): Promise<TokenRegistry> {
+  const json = await registryBody();
+  const wanted = new Set(mints);
+  const all = unwrap<unknown>(json, ['data', 'tokens'])
+    .map(toToken)
+    .filter((t): t is Token => t !== null);
+
+  let nftLikeCount = 0;
+  for (const t of all) if (isNftLike(t)) nftLikeCount++;
+
+  return {
+    tokens: all.filter((t) => wanted.has(t.mint)).map(withoutDescription),
+    cookUsd: num(pick(json, ['cookUsd'])),
+    count: num(pick(json, ['count'])) ?? all.length,
+    fungibleCount: all.length - nftLikeCount,
+    nftLikeCount,
+    view: 'priced',
+  };
+}
+
 export async function fetchRegistry(view: RegistryView = 'priced'): Promise<TokenRegistry> {
   const json = await registryBody();
   const all = unwrap<unknown>(json, ['data', 'tokens'])

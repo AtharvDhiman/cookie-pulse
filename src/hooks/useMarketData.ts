@@ -5,7 +5,7 @@
 // 92 rows of it carry a price — see `/api/tokens` and NOTES.md.
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { getMarkets, getRegistry } from '@/lib/api';
+import { getMarkets, getRegistry, getTokensByMint } from '@/lib/api';
 import { COOK_DECIMALS, COOK_MINT, COOK_SYMBOL } from '@/lib/config';
 import type { RegistryView, Token } from '@/lib/types';
 
@@ -74,6 +74,45 @@ export function useScreenerRegistry(showAll: boolean) {
     isLoading: active.isLoading,
     isError: active.isError,
   };
+}
+
+/**
+ * Identity for mints the priced view does not carry.
+ *
+ * `useRegistry()` is a price feed — 92 of 6,473 rows. A wallet's holdings and a /trade deep link are
+ * addressed by mint and have no obligation to be priced, and without this they render as a
+ * truncated address labelled "Unlisted token". Only the mints actually missing are requested, so a
+ * wallet holding nothing unusual issues no request at all.
+ *
+ * Returns a map that already includes the priced view, so callers can use it as their only lookup.
+ */
+export function useTokenDirectory(mints: string[]): Map<string, Token> {
+  const { byMint } = useRegistry();
+
+  // Sorted and joined so the query key is stable across re-renders that reorder the same holdings.
+  const missing = useMemo(() => {
+    const out = [...new Set(mints)].filter((m) => m && !byMint.has(m));
+    out.sort();
+    return out;
+  }, [mints, byMint]);
+
+  const query = useQuery({
+    queryKey: ['token-directory', missing.join(',')],
+    enabled: missing.length > 0,
+    queryFn: ({ signal }) => getTokensByMint(missing, signal),
+    // Names and logos do not move; this is identity, not market data.
+    staleTime: 10 * 60_000,
+    gcTime: 30 * 60_000,
+    retry: 1,
+  });
+
+  return useMemo(() => {
+    const resolved = query.data?.tokens;
+    if (!resolved || resolved.length === 0) return byMint;
+    const merged = new Map(byMint);
+    for (const t of resolved) merged.set(t.mint, displayToken(t));
+    return merged;
+  }, [byMint, query.data]);
 }
 
 export function useMarkets() {

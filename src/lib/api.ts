@@ -22,6 +22,14 @@ async function getJson<T>(url: string, signal?: AbortSignal): Promise<T> {
 export const getRegistry = (view: RegistryView, signal?: AbortSignal) =>
   getJson<TokenRegistry>(view === 'full' ? '/api/tokens?view=full' : '/api/tokens', signal);
 
+/**
+ * Identity for specific mints, priced or not — what a wallet's holdings and a /trade deep link
+ * need. The priced view is a price feed, not a directory, so anything unlisted there would
+ * otherwise render as a truncated address.
+ */
+export const getTokensByMint = (mints: string[], signal?: AbortSignal) =>
+  getJson<TokenRegistry>(`/api/tokens?mints=${encodeURIComponent(mints.join(','))}`, signal);
+
 export const getMarkets = (signal?: AbortSignal) => getJson<MarketsSnapshot>('/api/markets', signal);
 
 export const getCookPrice = (signal?: AbortSignal) =>

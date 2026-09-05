@@ -10,7 +10,7 @@ import Link from 'next/link';
 import { VersionedTransaction } from '@solana/web3.js';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { useWalletModal } from '@solana/wallet-adapter-react-ui';
-import { AlertTriangle, ArrowDownUp, Loader2, PauseCircle, RotateCw } from 'lucide-react';
+import { AlertTriangle, ArrowDownUp, ArrowUpRight, Loader2, PauseCircle, RotateCw } from 'lucide-react';
 import { postSwapTx } from '@/lib/api';
 import {
   COOK_DECIMALS,
@@ -22,19 +22,36 @@ import {
   MAX_SLIPPAGE_BPS,
   SLIPPAGE_PRESETS,
   TOKEN_ACCOUNT_RENT_LAMPORTS,
+  explorerTx,
   slippageLabel,
 } from '@/lib/config';
-import { formatAmount, formatUsd, fromRawAmount, toRawAmount } from '@/lib/format';
+import { formatAmount, formatUsd, fromRawAmount, shortAddr, toRawAmount } from '@/lib/format';
 import { PresentableError, type FriendlyError } from '@/lib/errors';
-import { rankableTokens, useRegistry } from '@/hooks/useMarketData';
+import { rankableTokens, useRegistry, useTokenDirectory } from '@/hooks/useMarketData';
 import type { Quote } from '@/lib/types';
 import { useCookBalance, useRefreshBalances, useTokenBalances } from '@/hooks/useBalances';
-import { useTransaction } from '@/hooks/useTransaction';
+import { useTransaction, type TxState } from '@/hooks/useTransaction';
 import { useQuote } from '@/hooks/useQuote';
 import { Button } from '@/components/ui/Button';
 import { Card, EmptyState, Skeleton, cn } from '@/components/ui/primitives';
 import { RouteDisplay, compareRoutes, describeRouteCheck, type RouteCheck } from './RouteDisplay';
 import { TokenPicker } from './TokenPicker';
+
+/**
+ * The same five in-flight strings /send already uses. Two signature surfaces naming the same states
+ * differently is the clearest incoherence in the product, so this table is deliberately identical
+ * to SendForm's — only the verb differs.
+ */
+const BUTTON_TEXT: Record<TxState, string> = {
+  idle: 'Swap',
+  building: 'Building…',
+  'awaiting-signature': 'Approve in Nightly…',
+  simulating: 'Simulating…',
+  sending: 'Sending…',
+  confirming: 'Confirming…',
+  confirmed: 'Swap',
+  failed: 'Swap',
+};
 
 /** Above this the impact is amber; above HIGH_IMPACT_PCT it is red and warned about explicitly. */
 const WARN_IMPACT_PCT = 1;
@@ -196,6 +213,14 @@ export function SwapPanel({
   const [slippageBps, setSlippageBps] = useState<number>(DEFAULT_SLIPPAGE_BPS);
   const [customSlippage, setCustomSlippage] = useState('');
 
+  /**
+   * What the last confirmed swap actually was. Not a status — `tx.state` and `tx.signature` remain
+   * the only sources for that — just the human-readable record, so the block can still name the
+   * trade after `onConfirmed` has cleared the amount field. Dropped the moment the user changes the
+   * amount or the pair, so it can never describe a different trade than the one on screen.
+   */
+  const [receipt, setReceipt] = useState<{ signature: string; summary: string } | null>(null);
+
   // Only 3 tokens have any 24h volume (NOTES.md), so this reliably lands on the one live pair.
   const defaultOutMint = useMemo(() => {
     const ranked = [...rankableTokens(tokens)].sort(
@@ -204,17 +229,33 @@ export function SwapPanel({
     return ranked[0]?.mint ?? null;
   }, [tokens]);
 
-  // Resolve the pair once the registry lands: a mint from ?in=/?out= that the registry does not
-  // know has no decimals, so it cannot be quoted — fall back rather than showing a broken field.
+  // A deep link can name a mint the priced projection does not carry — the screener's own Trade
+  // button emits exactly those links for unpriced rows. Resolve them by mint rather than silently
+  // substituting a different token: changing what the user is about to trade, without saying so, is
+  // the worst possible way to handle a link that was perfectly valid.
+  const linkedMints = useMemo(
+    () => [initialInMint, initialOutMint].filter((m): m is string => Boolean(m)),
+    [initialInMint, initialOutMint],
+  );
+  const directory = useTokenDirectory(linkedMints);
+
+  // Resolve the pair once the registry lands. A mint neither the registry nor the directory knows
+  // has no decimals and cannot be quoted, so it still falls back — but now it says so.
   const registryReady = tokens.length > 0;
+  const [unresolvedMint, setUnresolvedMint] = useState<string | null>(null);
   useEffect(() => {
     if (!registryReady) return;
-    setInputMint((cur) => (cur && byMint.has(cur) ? cur : COOK_MINT));
-    setOutputMint((cur) => (cur && byMint.has(cur) ? cur : defaultOutMint));
-  }, [registryReady, byMint, defaultOutMint]);
+    // Wait for an in-flight lookup before judging a linked mint unknown.
+    const pendingLookup = linkedMints.some((m) => !directory.has(m));
+    setInputMint((cur) => (cur && directory.has(cur) ? cur : pendingLookup ? cur : COOK_MINT));
+    setOutputMint((cur) => (cur && directory.has(cur) ? cur : pendingLookup ? cur : defaultOutMint));
+    setUnresolvedMint(
+      pendingLookup ? null : (linkedMints.find((m) => !directory.has(m)) ?? null),
+    );
+  }, [registryReady, directory, defaultOutMint, linkedMints]);
 
-  const inputToken = inputMint ? (byMint.get(inputMint) ?? null) : null;
-  const outputToken = outputMint ? (byMint.get(outputMint) ?? null) : null;
+  const inputToken = inputMint ? (directory.get(inputMint) ?? null) : null;
+  const outputToken = outputMint ? (directory.get(outputMint) ?? null) : null;
 
   // One exact holding per mint, summed in raw base units across every account the wallet has for
   // it. The Balance line, the MAX button and the sufficiency check all read this one number: they
@@ -336,11 +377,13 @@ export function SwapPanel({
     outputToken?.priceUsd != null && outAmount !== null ? outAmount * outputToken.priceUsd : null;
 
   function selectInput(mint: string) {
+    setReceipt(null);
     if (mint === outputMint) setOutputMint(inputMint);
     setInputMint(mint);
   }
 
   function selectOutput(mint: string) {
+    setReceipt(null);
     if (mint === inputMint) setInputMint(outputMint);
     setOutputMint(mint);
   }
@@ -349,12 +392,16 @@ export function SwapPanel({
     // Before the registry resolves, one side can still be null. Swapping then leaves the resolve
     // effect to backfill COOK into both sides, which deadlocks the quote at input === output.
     if (!inputMint || !outputMint) return;
+    setReceipt(null);
     setInputMint(outputMint);
     setOutputMint(inputMint);
   }
 
   function onAmountChange(value: string) {
-    if (value === '' || /^\d*\.?\d*$/.test(value)) setAmount(value);
+    if (value === '' || /^\d*\.?\d*$/.test(value)) {
+      setReceipt(null);
+      setAmount(value);
+    }
   }
 
   function applyPreset(bps: number) {
@@ -422,7 +469,15 @@ export function SwapPanel({
           lastValidBlockHeight: res.lastValidBlockHeight,
         };
       },
-      onConfirmed: () => {
+      onConfirmed: (signature) => {
+        // Captured from this closure, which still holds the amounts as submitted — the fields are
+        // cleared on the next line, and the toast that carries this only lives 12 seconds.
+        const paid = inputToken ? `${amount} ${inputToken.symbol}` : amount;
+        const received =
+          outAmount !== null && outputToken
+            ? `${formatAmount(outAmount, Math.min(outputToken.decimals, 6))} ${outputToken.symbol}`
+            : (outputToken?.symbol ?? '');
+        setReceipt({ signature, summary: received ? `${paid} → ${received}` : paid });
         refreshBalances();
         setAmount('');
       },
@@ -431,7 +486,7 @@ export function SwapPanel({
 
   const action = ((): { label: string; disabled: boolean; loading: boolean } => {
     if (!connected) return { label: 'Connect wallet', disabled: false, loading: false };
-    if (tx.pending) return { label: 'Swapping…', disabled: true, loading: true };
+    if (tx.pending) return { label: BUTTON_TEXT[tx.state], disabled: true, loading: true };
     if (!inputToken || !outputToken) return { label: 'Select tokens', disabled: true, loading: false };
     if (samePair) return { label: 'Select two different tokens', disabled: true, loading: false };
     if (tooPrecise)
@@ -585,9 +640,14 @@ export function SwapPanel({
                 key={bps}
                 type="button"
                 onClick={() => applyPreset(bps)}
+                // Every other control freezes while a run is in flight; these two did not, and
+                // changing slippage re-keys the quote — so the numbers the user is looking at could
+                // change out from under the transaction they have already sent to Nightly.
+                disabled={tx.pending}
                 aria-pressed={slippageBps === bps && customSlippage === ''}
                 className={cn(
                   'rounded-md border px-2 py-1 text-xs font-semibold tabular-nums transition-colors',
+                  'disabled:cursor-not-allowed disabled:opacity-50',
                   slippageBps === bps && customSlippage === ''
                     ? 'border-accent/60 bg-accent/15 text-accent'
                     : 'border-hairline/10 bg-surface2 text-ink2 hover:border-accent/40',
@@ -603,12 +663,13 @@ export function SwapPanel({
               inputMode="decimal"
               value={customSlippage}
               onChange={(e) => onCustomSlippage(e.target.value)}
+              disabled={tx.pending}
               onBlur={() => {
                 if (customSlippage !== '') setCustomSlippage(String(slippageBps / 100));
               }}
               placeholder="Custom"
               aria-label={`Custom slippage in percent, maximum ${slippageLabel(MAX_SLIPPAGE_BPS)}`}
-              className="w-16 bg-transparent text-xs font-semibold tabular-nums text-ink outline-none placeholder:font-normal placeholder:text-muted"
+              className="w-16 bg-transparent text-xs font-semibold tabular-nums text-ink outline-none placeholder:font-normal placeholder:text-muted disabled:opacity-50"
             />
             <span className="text-xs text-muted">%</span>
           </div>
@@ -682,6 +743,39 @@ export function SwapPanel({
               >
                 Retry
               </button>
+            </div>
+          ) : null}
+
+          {/* Survives the toast. `tx.state` is the status source; the receipt only supplies the
+              wording of the trade it describes, and is dropped as soon as the panel changes. */}
+          {tx.state === 'confirmed' && receipt ? (
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-up/40 bg-up/10 p-3">
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-up">Swap confirmed</p>
+                <p className="truncate text-xs text-ink2">{receipt.summary}</p>
+              </div>
+              <a
+                href={explorerTx(receipt.signature)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex shrink-0 items-center gap-1 font-mono text-xs text-ink2 transition-colors hover:text-accent hover:underline"
+              >
+                {shortAddr(receipt.signature, 6, 6)}
+                <ArrowUpRight size={13} aria-hidden="true" />
+              </a>
+            </div>
+          ) : null}
+
+          {/* A link named a mint that neither the registry nor a by-mint lookup could resolve, so
+              the pair had to fall back. Say which one, rather than quietly trading something else. */}
+          {unresolvedMint ? (
+            <div className="flex items-start gap-2 rounded-xl border border-warn/40 bg-warn/10 p-3">
+              <AlertTriangle size={15} className="mt-0.5 shrink-0 text-warn" aria-hidden="true" />
+              <p className="text-xs text-ink2">
+                <strong className="text-ink">This link named a token we could not resolve.</strong>{' '}
+                <span className="font-mono">{shortAddr(unresolvedMint, 6, 6)}</span> is not in the
+                Cookie Chain registry, so the pair below is the default, not what the link asked for.
+              </p>
             </div>
           ) : null}
 

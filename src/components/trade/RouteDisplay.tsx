@@ -65,8 +65,15 @@ export type RouteCheck =
       kind: 'match' | 'accepted' | 'refused';
       /** Same venues and same pools on both sides. */
       samePath: boolean;
-      /** How far the built route fell below the displayed one, in bps, rounded up. 0 = no worse. */
+      /**
+        * How far the built route fell below the displayed one, in bps, rounded up. 0 = no worse.
+        * `shortfallBps` is the max of the two and drives the refusal; the halves are kept separate
+        * because a re-route can move the expected output without touching the guaranteed minimum,
+        * and the sentence must cite whichever actually moved rather than asserting both did.
+        */
       shortfallBps: number;
+      netShortfallBps: number;
+      minShortfallBps: number;
       slippageBps: number;
       quoted: RouteFacts;
       built: RouteFacts;
@@ -116,12 +123,20 @@ export function compareRoutes(quoted: Quote, built: Quote | null, slippageBps: n
   const b = routeFacts(built);
   const samePath =
     q.venues.join('|') === b.venues.join('|') && q.pools.join('|') === b.pools.join('|');
-  const drop = Math.max(
-    shortfallBps(q.netOutAmount, b.netOutAmount),
-    shortfallBps(q.minOutAmount, b.minOutAmount),
-  );
+  const netShortfallBps = shortfallBps(q.netOutAmount, b.netOutAmount);
+  const minShortfallBps = shortfallBps(q.minOutAmount, b.minOutAmount);
+  const drop = Math.max(netShortfallBps, minShortfallBps);
   const kind = drop >= slippageBps ? 'refused' : samePath && drop === 0 ? 'match' : 'accepted';
-  return { kind, samePath, shortfallBps: drop, slippageBps, quoted: q, built: b };
+  return {
+    kind,
+    samePath,
+    shortfallBps: drop,
+    netShortfallBps,
+    minShortfallBps,
+    slippageBps,
+    quoted: q,
+    built: b,
+  };
 }
 
 /** Output-token context for rendering raw base units as an amount the user recognises. */
@@ -148,11 +163,19 @@ export function describeRouteCheck(
   )} at ${amount(check.built.netOutAmount)}`;
 
   if (check.kind === 'refused') {
+    // Name the figure that actually fell. Attributing the whole drop to the guaranteed minimum when
+    // only the expected output moved would put a false number in the sentence that blocks the trade.
+    const cause =
+      check.minShortfallBps >= check.netShortfallBps
+        ? `Its guaranteed minimum ${amount(check.built.minOutAmount)} is ${check.minShortfallBps} bps ` +
+          `below the ${amount(check.quoted.minOutAmount)} minimum you were shown`
+        : `Its expected output is ${check.netShortfallBps} bps below what you were shown` +
+          (check.minShortfallBps === 0
+            ? ', with the guaranteed minimum unchanged'
+            : `, and the guaranteed minimum fell ${check.minShortfallBps} bps`);
     return (
-      `Cookiebox re-quoted while building: ${move}. Its guaranteed minimum ${amount(
-        check.built.minOutAmount,
-      )} is ${check.shortfallBps} bps below the ${amount(check.quoted.minOutAmount)} minimum you ` +
-      `were shown, which is past your ${slip} slippage — so nothing was signed.`
+      `Cookiebox re-quoted while building: ${move}. ${cause}, which is past your ${slip} ` +
+      `slippage — so nothing was signed.`
     );
   }
   if (check.kind === 'match') {
@@ -162,10 +185,12 @@ export function describeRouteCheck(
     );
   }
   if (check.samePath) {
-    return (
-      `Same pools at build time (${venues(check.built)}). The minimum moved ${check.shortfallBps} ` +
-      `bps to ${amount(check.built.minOutAmount)}, inside your ${slip} slippage.`
-    );
+    const moved =
+      check.minShortfallBps > 0
+        ? `The minimum moved ${check.minShortfallBps} bps to ${amount(check.built.minOutAmount)}`
+        : `The expected output moved ${check.netShortfallBps} bps to ${amount(check.built.netOutAmount)}, ` +
+          `with the minimum unchanged`;
+    return `Same pools at build time (${venues(check.built)}). ${moved}, inside your ${slip} slippage.`;
   }
   return check.shortfallBps === 0
     ? `Re-routed while building: ${move} — no worse than you were quoted.`

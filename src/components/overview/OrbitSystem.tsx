@@ -26,10 +26,11 @@ import { compact, formatUsd } from '@/lib/format';
 /** Ring geometry in the SVG's own 0..320 user space. */
 const CX = 160;
 const CY = 160;
+// Direction alternates in CSS via :nth-of-type(odd), so it is not carried here — one source.
 const RINGS = [
-  { r: 62, tilt: 0.42, dur: '38s', dir: 1 },
-  { r: 96, tilt: 0.42, dur: '58s', dir: -1 },
-  { r: 132, tilt: 0.42, dur: '86s', dir: 1 },
+  { r: 62, tilt: 0.42, dur: '38s' },
+  { r: 96, tilt: 0.42, dur: '58s' },
+  { r: 132, tilt: 0.42, dur: '86s' },
 ] as const;
 
 interface OrbitNode {
@@ -53,10 +54,10 @@ function Ring({
   nodes: OrbitNode[];
   ariaLabel: string;
 }) {
-  const { r, tilt, dur, dir } = ring;
+  const { r, tilt, dur } = ring;
 
   return (
-    <g className="orbit__ring" style={{ ['--dur' as string]: dur, ['--dir' as string]: dir }}>
+    <g className="orbit__ring" style={{ ['--dur' as string]: dur }}>
       <ellipse
         cx={CX}
         cy={CY}

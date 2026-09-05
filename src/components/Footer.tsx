@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { Reveal } from '@/components/motion/Reveal';
 import { EXPLORER_URL, RPC_URL } from '@/lib/config';
 
 const LINKS = [
@@ -11,7 +12,7 @@ const LINKS = [
 export function Footer() {
   return (
     <footer className="border-t border-hairline/10">
-      <div className="mx-auto flex w-full max-w-[1280px] flex-col gap-3 px-3 py-6 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+      <Reveal index={0} className="mx-auto flex w-full max-w-[1280px] flex-col gap-3 px-3 py-6 sm:flex-row sm:items-center sm:justify-between sm:px-6">
         <div className="min-w-0">
           <p className="font-display text-[13px] font-bold tracking-tight">
             Cookie<span className="accent-text">Pulse</span>
@@ -23,13 +24,15 @@ export function Footer() {
         </div>
 
         <nav aria-label="External resources" className="flex flex-wrap items-center gap-x-4 gap-y-1">
-          {LINKS.map((l) => (
+          {LINKS.map((l, i) => (
             <a
               key={l.href}
               href={l.href}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-[11px] font-medium text-muted transition-colors hover:text-accent"
+              data-stagger="fade"
+              style={{ '--i': i } as React.CSSProperties}
+              className="link-wipe relative text-[11px] font-medium text-muted transition-colors duration-[160ms] hover:text-accent after:absolute after:inset-x-0 after:-bottom-0.5 after:h-px after:bg-accent after:content-['']"
             >
               {l.label}
             </a>
@@ -49,7 +52,7 @@ export function Footer() {
             Get COOK
           </Link>
         </nav>
-      </div>
+      </Reveal>
     </footer>
   );
 }

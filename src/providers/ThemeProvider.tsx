@@ -49,7 +49,25 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     }
   }, [theme]);
 
-  const toggle = useCallback(() => setTheme((t) => (t === 'dark' ? 'light' : 'dark')), []);
+  // Time-boxed crossfade. The attribute is what scopes it: a standing transition on `.glass` would
+  // tax every hover and every poll-driven class change on a backdrop-filtered surface.
+  const changingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (changingTimer.current) clearTimeout(changingTimer.current);
+    },
+    [],
+  );
+
+  const toggle = useCallback(() => {
+    const root = document.documentElement;
+    root.dataset.themeChanging = '';
+    if (changingTimer.current) clearTimeout(changingTimer.current);
+    changingTimer.current = setTimeout(() => {
+      delete root.dataset.themeChanging;
+    }, 280);
+    setTheme((t) => (t === 'dark' ? 'light' : 'dark'));
+  }, []);
 
   return <ThemeContext.Provider value={{ theme, toggle }}>{children}</ThemeContext.Provider>;
 }

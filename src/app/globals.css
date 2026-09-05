@@ -398,6 +398,122 @@ body {
   .pw:not([data-pw-active]) .pw-inner {
     transition: transform var(--dur-scrim) var(--ease-lead);
   }
+
+  /* ── S1: shell chrome ──────────────────────────────────────────────────────────────────────
+     The nav underline only exists on the active link, so it genuinely remounts on navigation and
+     the wipe replays for free — no layout projection, no measurement, no shared-element machinery
+     inside an overflow-x-auto row. */
+  html.js .nav-underline {
+    animation: nav-wipe 320ms var(--ease-lead) both;
+    transform-origin: left center;
+  }
+  @keyframes nav-wipe {
+    from {
+      transform: scaleX(0);
+    }
+    to {
+      transform: scaleX(1);
+    }
+  }
+
+  /* The wallet dropdown. Enter only: the common dismissal changes what is underneath, so a fading
+     panel would be showing a stale menu. */
+  html.js .menu-in {
+    animation: menu-in var(--dur-state) var(--ease-lead) both;
+    transform-origin: top right;
+  }
+  html.js .menu-in [data-stagger] {
+    animation: menu-row var(--dur-state) var(--ease-lead) both;
+    animation-delay: calc(var(--i, 0) * 40ms);
+  }
+  @keyframes menu-in {
+    from {
+      opacity: 0;
+      transform: translateY(-6px) scale(0.97);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  @keyframes menu-row {
+    from {
+      opacity: 0;
+      transform: translateY(var(--rise-row));
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  /* The theme toggle's two icons are stacked and crossfade. Gated on `data-mounted` so
+     GateScript's synchronous `.light` correction cannot spin the icon on first paint. */
+  .theme-icon {
+    grid-area: 1 / 1;
+    opacity: 0;
+    transform: rotate(-90deg) scale(0.7);
+  }
+  .theme-toggle[data-mounted] .theme-icon {
+    transition:
+      opacity 260ms var(--ease-lead),
+      transform 260ms var(--ease-lead);
+  }
+  .theme-icon[data-active] {
+    opacity: 1;
+    transform: none;
+  }
+  .theme-toggle[data-mounted] .theme-icon:not([data-active]) {
+    transform: rotate(90deg) scale(0.7);
+  }
+
+  /* Footer links: a wipe on hover AND focus, so keyboard users get the same affordance. */
+  html.js .link-wipe::after {
+    transform: scaleX(0);
+    transform-origin: left center;
+    transition: transform 220ms var(--ease-lead);
+  }
+  html.js .link-wipe:hover::after,
+  html.js .link-wipe:focus-visible::after {
+    transform: scaleX(1);
+  }
+
+  /* The one sanctioned layout animation in the app: 0fr→1fr on a permanently-mounted slot. The
+     alternative is an instant 37px shove under a sticky header. */
+  html.js .banner-slot {
+    transition: grid-template-rows 260ms var(--ease-lead);
+  }
+  html.js .banner-slot > * {
+    opacity: 0;
+    transition: opacity 200ms var(--ease-lead) 60ms;
+  }
+  html.js .banner-slot[data-open] > * {
+    opacity: 1;
+  }
+}
+
+/* Theme crossfade. Time-boxed by an attribute the toggle sets and clears, never a standing
+   transition on `.glass` — that would tax every hover and every poll-driven class change on a
+   backdrop-filtered surface. `.ambient` is excluded so a full-viewport gradient never repaints. */
+[data-theme-changing] :where(body, .site-header, footer, .glass, .glass-solid) {
+  transition:
+    background-color 240ms linear,
+    border-color 240ms linear,
+    color 240ms linear;
+}
+
+/* The banner slot itself is layout, not choreography, so it is ungated: with no JS and no motion
+   the row is simply open or absent. */
+.banner-slot {
+  display: grid;
+  grid-template-rows: 0fr;
+}
+.banner-slot[data-open] {
+  grid-template-rows: 1fr;
+}
+.banner-slot > * {
+  overflow: hidden;
+  min-height: 0;
 }
 
 /* The sticky header's scrim, driven by the attribute useScrollShell maintains. Opacity only:

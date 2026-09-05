@@ -111,7 +111,10 @@ bucket(
   'unmapped program error',
 );
 bucket(new Error('TypeError: Failed to fetch'), NETWORK, 'RPC unreachable');
-bucket('Could not build the swap (HTTP 404)', NO_ROUTE, 'pair stopped routing before signing');
+// The real string: /api/swap-tx forwards the aggregator's own sentence verbatim (errorResponse
+// always answers JSON, so api.ts's `(HTTP 404)` fallback only fires when the ROUTE is missing —
+// a different failure, deliberately no longer mapped to "no route for this pair").
+bucket('no route found for this pair', NO_ROUTE, 'pair stopped routing before signing');
 
 // --- error buckets: the five anchoring defects ----------------------------------------------------
 console.log('\ntoFriendlyError — anchored codes must not swallow unrelated strings');
@@ -239,6 +242,43 @@ check(
   JSON.stringify(live),
 );
 check('a null entry parses to null', parseSignatureStatus(null) === null, 'never seen');
+
+// --- Custom:1 is only "insufficient funds" for the programs where that is what 1 means -----------
+console.log('\ntoFriendlyError — custom error 1 is scoped to the program that raised it');
+{
+  const withLogs = (logs: string[]) =>
+    Object.assign(new Error('Simulation failed: {"InstructionError":[0,{"Custom":1}]}'), { logs });
+
+  bucket(
+    withLogs([
+      'Program 11111111111111111111111111111111 invoke [1]',
+      'Program 11111111111111111111111111111111 failed: custom program error: 0x1',
+    ]),
+    FUNDS,
+    'system program error 1 really is insufficient funds',
+  );
+  bucket(
+    withLogs([
+      'Program TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA invoke [1]',
+      'Program TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA failed: custom program error: 0x1',
+    ]),
+    FUNDS,
+    'spl-token error 1 is a short token balance',
+  );
+  bucket(
+    withLogs([
+      'Program DAMMjDCEFTDkt7ywazZS8GoaLtjb3HaJo3pLbf64xrPY invoke [1]',
+      'Program DAMMjDCEFTDkt7ywazZS8GoaLtjb3HaJo3pLbf64xrPY failed: custom program error: 0x1',
+    ]),
+    SIMULATION,
+    'a router error 1 must NOT send the user off to bridge more COOK',
+  );
+  bucket(
+    'Simulation failed: {"InstructionError":[0,{"Custom":1}]}',
+    FUNDS,
+    'with no logs naming a program, the common reading stands',
+  );
+}
 
 console.log(`\n${failed === 0 ? GREEN : RED}${passed} passed, ${failed} failed${RESET}\n`);
 if (failed > 0) process.exit(1);

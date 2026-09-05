@@ -9,7 +9,9 @@ import { ArrowUpRight, Droplets } from 'lucide-react';
 import { useMarkets, useRegistry } from '@/hooks/useMarketData';
 import { COOK_MINT, COOK_SYMBOL } from '@/lib/config';
 import { compact, formatUsd } from '@/lib/format';
+import { useCapital } from '@/hooks/useCapital';
 import { ActivityPanel } from '@/components/overview/ActivityPanel';
+import { CapitalMap } from '@/components/overview/CapitalMap';
 import { HealthStrip } from '@/components/overview/HealthStrip';
 import { Hero } from '@/components/overview/Hero';
 import { MoversTiles } from '@/components/overview/MoversTiles';
@@ -163,6 +165,11 @@ function TvlCard() {
   );
 }
 
+function CapitalMapSection() {
+  const { snapshot, isLoading } = useCapital();
+  return <CapitalMap snapshot={snapshot} isLoading={isLoading} />;
+}
+
 export default function OverviewPage() {
   return (
     // The <h1> lives in <Hero>, so there is exactly one on the page.
@@ -179,6 +186,10 @@ export default function OverviewPage() {
           {/* TvlCard declares its own lg:col-span-2, so it must be a direct grid child. */}
           <TvlCard />
         </div>
+
+        {/* Sits directly under the TVL card on purpose: the two answer the same question, and this
+            one supplies the context that stops $8.1K reading as the whole chain. */}
+        <CapitalMapSection />
 
         <MoversTiles />
 

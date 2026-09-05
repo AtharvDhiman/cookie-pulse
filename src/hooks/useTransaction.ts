@@ -5,7 +5,7 @@
 // failed (it can still land), and a simulation error must show its logs.
 //
 // idle -> building -> awaiting-signature -> simulating -> sending -> confirming -> confirmed | failed
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { VersionedTransaction } from '@solana/web3.js';
 import { useConnection, useWallet } from '@solana/wallet-adapter-react';
 import { toast } from 'sonner';
@@ -96,6 +96,25 @@ export function useTransaction() {
     setSignature(null);
   }, []);
 
+  /**
+   * The live toast, and whether anything has been broadcast under it yet.
+   *
+   * Unmounting splits into two genuinely different cases. Before the transaction is sent, nothing
+   * exists on-chain and a leftover "Approve in Nightly…" toast is just litter — worse, if the user
+   * never answers the wallet prompt, `signTransaction` may never settle and it would hang forever.
+   * After it is sent, real COOK is in flight and the outcome is the whole point, so that run is left
+   * to finish and post its verdict into the root-level `Toaster`.
+   */
+  const activeToast = useRef<{ id: string | number; broadcast: boolean } | null>(null);
+
+  useEffect(
+    () => () => {
+      const live = activeToast.current;
+      if (live && !live.broadcast) toast.dismiss(live.id);
+    },
+    [],
+  );
+
   const run = useCallback(
     async ({ label, build, onConfirmed }: RunArgs): Promise<string | null> => {
       if (!publicKey || !signTransaction) {
@@ -108,11 +127,14 @@ export function useTransaction() {
 
       setError(null);
       setSignature(null);
-      // Every exit below replaces this toast by id, and the run is deliberately never cancelled:
-      // `Toaster` lives in the root layout, so navigating away from /send mid-confirmation leaves
-      // this closure free to finish and post the real verdict, rather than discarding the outcome
-      // of a transaction that has already spent real COOK. `resolveConfirmation` bounds itself.
+      // Every exit below replaces this toast by id. Once the transaction is broadcast the run is
+      // deliberately not cancelled: `Toaster` lives in the root layout, so navigating away from
+      // /send mid-confirmation leaves this closure free to finish and post the real verdict, rather
+      // than discarding the outcome of a transaction that has already spent real COOK.
+      // `resolveConfirmation` bounds itself. Before broadcast there is no outcome to lose, so the
+      // unmount effect above clears the toast instead of leaving it spinning.
       const id = toast.loading(`${label}: ${STATE_TEXT.building}`);
+      activeToast.current = { id, broadcast: false };
 
       const step = (next: Exclude<TxState, 'idle' | 'confirmed' | 'failed'>) => {
         setState(next);
@@ -173,6 +195,8 @@ export function useTransaction() {
         });
         sentSignature = sig;
         setSignature(sig);
+        // From here the outcome outranks the component's lifetime: never dismiss this toast.
+        if (activeToast.current?.id === id) activeToast.current.broadcast = true;
 
         step('confirming');
         // The blockhash/lastValidBlockHeight strategy is unchanged and still the backstop; a 2s
@@ -219,6 +243,10 @@ export function useTransaction() {
         // out — the user needs to be able to check the transaction before retrying.
         showFailure(toFriendlyError(e), sentSignature);
         return null;
+      } finally {
+        // The run is over and this toast has been replaced by its terminal state, so there is
+        // nothing left for an unmount to dismiss.
+        if (activeToast.current?.id === id) activeToast.current = null;
       }
     },
     [connection, publicKey, signTransaction],

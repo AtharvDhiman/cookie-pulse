@@ -11,7 +11,10 @@
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "smoke": "tsx scripts/smoke.ts",
-    "test:errors": "tsx scripts/errors.test.ts"
+    "test:errors": "tsx scripts/errors.test.ts",
+    "test:confirm": "tsx scripts/confirm.test.ts",
+    "test": "npm run test:errors && npm run test:confirm",
+    "check:health": "tsx scripts/health.check.ts"
   },
   "dependencies": {
     "@solana/spl-token": "^0.4.9",

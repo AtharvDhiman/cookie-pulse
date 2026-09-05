@@ -38,6 +38,8 @@ export const UNKNOWN_REASON = {
   seenNotConfirmed: 'The RPC has seen this signature but has not confirmed it yet.',
   blockhashUnknown: 'The RPC did not say whether the blockhash is still valid.',
   rpcSilent: 'The RPC did not answer the status check.',
+  awaitingCorroboration:
+    'The blockhash looks dead and the signature is unknown — re-checking before saying so.',
 } as const;
 
 function errText(err: unknown): string {
@@ -109,22 +111,40 @@ export const POLL_INTERVAL_MS = 2_000;
 const BACKSTOP_GRACE_MS = 20_000;
 /** Absolute ceiling, so a wedged RPC cannot hold the UI open forever. */
 const MAX_RESOLVE_MS = 120_000;
+/**
+ * Consecutive rounds that must independently agree before we tell anyone a signature was never seen.
+ * That verdict is the only one whose UI says re-broadcasting is safe, and on a load-balanced RPC a
+ * single sample can miss a transaction that did land — so one observation is not allowed to spend
+ * the user's money twice.
+ */
+const NEVER_SEEN_CONFIRMATIONS = 2;
 
 /** The blockhash-strategy confirm, injected so this module never imports web3.js. */
 export type ConfirmBackstop = (sent: SentTx) => Promise<unknown>;
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+/** A sleep whose pending timer can be dropped, so a race that loses does not leak it. */
+function timer(ms: number): { promise: Promise<void>; cancel: () => void } {
+  let handle: ReturnType<typeof setTimeout>;
+  const promise = new Promise<void>((resolve) => {
+    handle = setTimeout(resolve, ms);
+  });
+  return { promise, cancel: () => clearTimeout(handle) };
+}
+
+/** `null` = the node answered and has no record. `undefined` = the node did not answer usefully. */
+async function readStatus(signature: string): Promise<SignatureStatus | null | undefined> {
+  try {
+    return parseSignatureStatus(await fetchSignatureStatus(signature));
+  } catch {
+    return undefined;
+  }
 }
 
 /** One status check. An RPC failure is information about the RPC, never about the transaction. */
 async function pollOnce(sent: SentTx): Promise<Verdict> {
-  let status: SignatureStatus | null;
-  try {
-    status = parseSignatureStatus(await fetchSignatureStatus(sent.signature));
-  } catch {
-    return { kind: 'unknown', reason: UNKNOWN_REASON.rpcSilent };
-  }
+  const status = await readStatus(sent.signature);
+  if (status === undefined) return { kind: 'unknown', reason: UNKNOWN_REASON.rpcSilent };
+
   // Only ask about the blockhash when the status is missing — that is the only branch it decides.
   if (status) return verdictFor(status, null);
   if (!sent.blockhash) return verdictFor(null, null);
@@ -135,7 +155,16 @@ async function pollOnce(sent: SentTx): Promise<Verdict> {
   } catch {
     valid = null;
   }
-  return verdictFor(null, valid);
+  if (valid !== false) return verdictFor(null, valid);
+
+  // The blockhash is dead, which is the only thing that can make a missing status meaningful. Read
+  // the status once more, AFTER that observation: the first read and the blockhash read are two
+  // round trips apart, and a transaction that landed in between would otherwise be reported as
+  // never seen — the one verdict that invites the user to pay again.
+  const recheck = await readStatus(sent.signature);
+  if (recheck === undefined) return { kind: 'unknown', reason: UNKNOWN_REASON.rpcSilent };
+  if (recheck) return verdictFor(recheck, null);
+  return { kind: 'never-seen' };
 }
 
 /**
@@ -155,36 +184,69 @@ export async function resolveConfirmation(
 ): Promise<Verdict> {
   const deadline = Date.now() + MAX_RESOLVE_MS;
   // Held on an object rather than in `let`s: they are written from callbacks and read across awaits.
-  const backstopState = { confirmed: false, graceUntil: null as number | null };
+  const backstopState = { confirmed: false, done: false, graceUntil: null as number | null };
 
   const settled = backstop(sent).then(
     () => {
       backstopState.confirmed = true;
+      backstopState.done = true;
       backstopState.graceUntil = Date.now() + BACKSTOP_GRACE_MS;
     },
     () => {
+      backstopState.done = true;
       backstopState.graceUntil = Date.now() + BACKSTOP_GRACE_MS;
     },
   );
 
   let last: Verdict = { kind: 'unknown', reason: UNKNOWN_REASON.notIndexedYet };
+  let neverSeenStreak = 0;
+
   for (;;) {
     const verdict = await pollOnce(sent);
     if (verdict.kind === 'landed' || verdict.kind === 'failed') return verdict;
+
     if (verdict.kind === 'never-seen') {
       // Contradiction: the backstop confirmed, so the status query is behind, not the chain.
-      return backstopState.confirmed ? { kind: 'landed', slot: null } : verdict;
+      if (backstopState.confirmed) return landedWithoutSlot(sent);
+      neverSeenStreak += 1;
+      if (neverSeenStreak >= NEVER_SEEN_CONFIRMATIONS) return verdict;
+      // Not yet corroborated — hold the softer sentence and look again next tick.
+      last = { kind: 'unknown', reason: UNKNOWN_REASON.awaitingCorroboration };
+    } else {
+      // Any other reading breaks the streak: the rounds must be consecutive to count.
+      neverSeenStreak = 0;
+      last = verdict;
     }
 
-    last = verdict;
     const now = Date.now();
     if (now >= deadline) break;
     if (backstopState.graceUntil !== null && now >= backstopState.graceUntil) break;
-    // Wakes early when the backstop answers, so a confirmed transaction is not held for a full tick.
-    await Promise.race([sleep(POLL_INTERVAL_MS), settled]);
+
+    // Racing `settled` wakes the loop early when the backstop answers, so a confirmed transaction is
+    // not held for a full tick. But `settled` stays resolved forever after, and re-racing it would
+    // make every later iteration return instantly — a tight loop hammering the RPC for the whole
+    // grace window. Once it has fired, just sleep.
+    const tick = timer(POLL_INTERVAL_MS);
+    try {
+      if (backstopState.done) await tick.promise;
+      else await Promise.race([tick.promise, settled]);
+    } finally {
+      tick.cancel();
+    }
   }
 
-  // Out of time. A confirming backstop is still an answer, just without a slot to name.
-  if (backstopState.confirmed) return { kind: 'landed', slot: null };
+  // Out of time. A confirming backstop is still an answer, just without a slot of its own.
+  if (backstopState.confirmed) return landedWithoutSlot(sent);
   return last;
+}
+
+/**
+ * The backstop saw the transaction land but the status endpoint has not named a slot. One last read
+ * is worth it: `describeVerdict` can then say which slot it landed in instead of a bare "Confirmed".
+ * Still returns `landed` either way — the backstop is the evidence, the slot is only the detail.
+ */
+async function landedWithoutSlot(sent: SentTx): Promise<Verdict> {
+  const status = await readStatus(sent.signature);
+  if (status) return { kind: 'landed', slot: status.slot };
+  return { kind: 'landed', slot: null };
 }

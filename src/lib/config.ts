@@ -26,6 +26,19 @@ export const COOK_SOLANA_DECIMALS = 6;
 export const BRIDGE_URL = 'https://hyperlane.cookiescan.io';
 export const HYPERLANE_DOMAINS = { cookie: 420042004, solana: 1399811149 } as const;
 
+/**
+ * Accounts the capital map reads, all read-only.
+ *
+ * `STAKE_POOL_ACCOUNT` is the bCOOK SPL stake pool; most of its balance sits in
+ * `STAKE_POOL_RESERVE` undelegated, which is why the two are surfaced separately rather than as one
+ * "staked" figure. `BRIDGE_COLLATERAL_PDA` is the Hyperlane warp-route account holding the COOK
+ * backing every bridged token on Solana (derivation published in hyperlane-cookies; also used by
+ * vendor/cookie-mcp).
+ */
+export const STAKE_POOL_ACCOUNT = 'GxbNKNYdtNXQkhDkpHdLDAMX64GxaECgANqdfp6cUGH4';
+export const STAKE_POOL_RESERVE = 'GAw1vRQ8R3ohDsSgGZV58dc32W7jYhHtc8DzuiVdvm8F';
+export const BRIDGE_COLLATERAL_PDA = 'CL2JoQ5jdTpRNKshWhaTihuooT4qrKdLUiPsqKj3yAKz';
+
 export const TOKEN_PROGRAM_ID = 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA';
 export const TOKEN_2022_PROGRAM_ID = 'TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb';
 export const MEMO_PROGRAM_ID = 'MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr';

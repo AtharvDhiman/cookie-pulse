@@ -56,6 +56,40 @@ function extractLogs(e: unknown): string[] | null {
   return null;
 }
 
+/**
+ * Programs for which custom error 1 really does mean "not enough funds": the System program
+ * (negative resulting lamports) and both token programs (insufficient token balance).
+ */
+const FUNDS_ERROR_1_PROGRAMS = new Set([
+  '11111111111111111111111111111111',
+  'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA',
+  'TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb',
+]);
+
+/** The program id in the last `Program <id> failed:` line, if the logs name one. */
+function failingProgram(logs: string[] | null): string | null {
+  if (!logs) return null;
+  for (let i = logs.length - 1; i >= 0; i--) {
+    const m = /^Program (\S+) failed:/.exec(logs[i]);
+    if (m) return m[1];
+  }
+  return null;
+}
+
+/**
+ * Whether a `Custom: 1` in this failure can be read as "insufficient funds".
+ *
+ * Custom error codes are per-program: 1 means insufficient funds in the System and token programs,
+ * but a Cookiebox router, DAMM or CLMM program numbers its own errors from the same space. Claiming
+ * "Not enough COOK to pay fees" — with a call to action that sends the user off to bridge more —
+ * for a router error would be wrong twice over. So when the logs name the failing program, the
+ * claim is only made for programs where it holds; with no logs to go on, the common case stands.
+ */
+function custom1MeansFunds(logs: string[] | null): boolean {
+  const program = failingProgram(logs);
+  return program === null || FUNDS_ERROR_1_PROGRAMS.has(program);
+}
+
 export function toFriendlyError(e: unknown): FriendlyError {
   // Already phrased by whoever threw it — matching it against the patterns below could only make
   // the message worse.
@@ -107,9 +141,10 @@ export function toFriendlyError(e: unknown): FriendlyError {
   // the old end-anchored `0x1$` could not fire. Error 1 is "insufficient funds" for both the System
   // program (negative lamports) and SPL Token (short token balance), hence the two-sided advice.
   if (
-    /insufficient (lamports|funds)|Attempt to debit an account but found no record|AccountNotFound|\b0x1\b|"Custom"\s*:\s*1\b/i.test(
+    /insufficient (lamports|funds)|Attempt to debit an account but found no record|AccountNotFound/i.test(
       raw,
-    )
+    ) ||
+    (/\b0x1\b|"Custom"\s*:\s*1\b/i.test(raw) && custom1MeansFunds(logs))
   ) {
     return err(
       'Not enough COOK to pay fees.',
@@ -161,8 +196,11 @@ export function toFriendlyError(e: unknown): FriendlyError {
 
   // "No route" is a textual answer, not a status code. A bare 404 cannot mean this: `fetchQuote`
   // already turns the aggregator's 404 into `route: null` upstream, so the only 404 that reaches a
-  // transaction is the swap build finding the pair stopped routing between quote and signature.
-  if (/no route|route not found|could not build the swap \(http 404\)/i.test(raw)) {
+  // transaction is the swap build finding the pair stopped routing between quote and signature —
+  // and that arrives as the aggregator's own sentence, forwarded verbatim by `errorResponse`.
+  // Matching the HTTP-404 fallback string too would be wrong: that string only appears when the
+  // response was not JSON at all, which means the route itself is missing, not the pair.
+  if (/no route|route not found/i.test(raw)) {
     return err('No route for this pair.', 'There is no pool path between these tokens yet.');
   }
 

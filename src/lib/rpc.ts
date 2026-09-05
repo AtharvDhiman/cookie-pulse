@@ -3,7 +3,7 @@
 // Health derivation ported from cookie-mcp (MIT) `src/core/health.ts`.
 import { RPC_URL } from './config';
 import { num, pick } from './normalize';
-import type { ChainHealth, HealthStatus } from './types';
+import type { ChainHealth, HealthStatus, PerfWindow } from './types';
 
 export const FINALIZATION_WARN_SLOTS = 150;
 export const FINALIZATION_STALL_SLOTS = 1000;
@@ -67,7 +67,14 @@ export async function fetchSignatureStatus(
     signal,
   );
   const value = res?.value;
-  return Array.isArray(value) ? (value[0] ?? null) : null;
+  // An array is the node answering: `value[0]` is the record, or null for "no record", and null
+  // there is real evidence. Anything else means we did not understand the reply — which must throw
+  // rather than collapse into that same null, because the caller treats a no-record answer as a
+  // step towards telling the user their transaction never landed.
+  if (!Array.isArray(value)) {
+    throw new Error('getSignatureStatuses: unexpected response shape');
+  }
+  return value[0] ?? null;
 }
 
 /** Whether a blockhash can still be used. null when the node did not answer with a boolean. */
@@ -83,6 +90,9 @@ export async function fetchBlockhashValid(
   return typeof res?.value === 'boolean' ? res.value : null;
 }
 
+/** Minutes of performance history asked for. 60 samples measured 6.2 KB — one request, still. */
+export const PERF_SAMPLE_MINUTES = 60;
+
 export const HEALTH_CALLS: RpcCall[] = [
   { id: 'health', method: 'getHealth' },
   { id: 'epoch', method: 'getEpochInfo' },
@@ -90,11 +100,77 @@ export const HEALTH_CALLS: RpcCall[] = [
   { id: 'confirmed', method: 'getSlot', params: [{ commitment: 'confirmed' }] },
   { id: 'finalized', method: 'getSlot', params: [{ commitment: 'finalized' }] },
   { id: 'version', method: 'getVersion' },
-  { id: 'perf', method: 'getRecentPerformanceSamples', params: [1] },
+  // The window the sparklines and the non-vote TPS figure are derived from. Asking for 60 instead
+  // of 1 costs nothing extra: it is the same call in the same batch, ~4 KB larger.
+  { id: 'perf', method: 'getRecentPerformanceSamples', params: [PERF_SAMPLE_MINUTES] },
   { id: 'votes', method: 'getVoteAccounts', params: [{ commitment: 'confirmed' }] },
+  // Rides the health tick so the capital map costs no round trip of its own.
+  // `excludeNonCirculatingAccountsList` matters more than it looks: by default this call ships the
+  // full list of non-circulating addresses — 214 of them, 10 KB, more than half the whole batch —
+  // and only `value.total` is ever read. Excluding it takes the tick from 18.3 KB to ~8.3 KB.
+  {
+    id: 'supply',
+    method: 'getSupply',
+    params: [{ commitment: 'confirmed', excludeNonCirculatingAccountsList: true }],
+  },
 ];
 
 const slotOf = (m: Map<string, RpcRes>, id: string) => num(m.get(id)?.result);
+
+/**
+ * Pure. Folds the performance samples into the window the UI charts.
+ *
+ * `getRecentPerformanceSamples` answers newest-first, so the series are reversed: a sparkline that
+ * reads right-to-left would silently invert every trend on the page.
+ */
+export function derivePerfWindow(rawSamples: unknown): PerfWindow {
+  const empty: PerfWindow = {
+    minutes: 0,
+    slotsPerSec: [],
+    nonVotePerMinute: [],
+    nonVoteTps: null,
+    totalTps: null,
+    zeroActivityMinutes: 0,
+  };
+  if (!Array.isArray(rawSamples) || rawSamples.length === 0) return empty;
+
+  const slotsPerSec: number[] = [];
+  const nonVotePerMinute: number[] = [];
+  let totalSeconds = 0;
+  let totalTx = 0;
+  let totalNonVote = 0;
+  let zeroActivityMinutes = 0;
+
+  // Oldest first.
+  for (let i = rawSamples.length - 1; i >= 0; i--) {
+    const s = rawSamples[i];
+    const period = num(pick(s, ['samplePeriodSecs']));
+    if (period === null || period <= 0) continue;
+
+    const numSlots = num(pick(s, ['numSlots'])) ?? 0;
+    const numTx = num(pick(s, ['numTransactions'])) ?? 0;
+    // Absent on older node builds; treated as unknown-but-not-negative rather than as zero activity.
+    const nonVote = num(pick(s, ['numNonVoteTransactions']));
+
+    slotsPerSec.push(numSlots / period);
+    nonVotePerMinute.push(nonVote ?? 0);
+    if (nonVote === 0) zeroActivityMinutes += 1;
+
+    totalSeconds += period;
+    totalTx += numTx;
+    totalNonVote += nonVote ?? 0;
+  }
+
+  if (totalSeconds <= 0) return empty;
+  return {
+    minutes: slotsPerSec.length,
+    slotsPerSec,
+    nonVotePerMinute,
+    nonVoteTps: totalNonVote / totalSeconds,
+    totalTps: totalTx / totalSeconds,
+    zeroActivityMinutes,
+  };
+}
 
 /** Pure: derives the health snapshot from a batch response, so it is testable without a network. */
 export function deriveChainHealth(map: Map<string, RpcRes>, latencyMs: number): ChainHealth {
@@ -118,19 +194,31 @@ export function deriveChainHealth(map: Map<string, RpcRes>, latencyMs: number): 
       : null;
 
   const version = pick(map.get('version')?.result, ['solana-core']);
-  const perf = Array.isArray(map.get('perf')?.result)
-    ? (map.get('perf')!.result as unknown[])[0]
-    : undefined;
-  const numSlots = num(pick(perf, ['numSlots']));
-  const samplePeriodSecs = num(pick(perf, ['samplePeriodSecs']));
-  const slotsPerSec =
-    numSlots !== null && samplePeriodSecs !== null && samplePeriodSecs > 0
-      ? Math.round((numSlots / samplePeriodSecs) * 100) / 100
+  const perf = derivePerfWindow(map.get('perf')?.result);
+  // The headline rate stays the most recent minute, not the window mean: it is a "right now" figure.
+  const latest = perf.slotsPerSec.length > 0 ? perf.slotsPerSec[perf.slotsPerSec.length - 1] : null;
+  const slotsPerSec = latest === null ? null : Math.round(latest * 100) / 100;
+
+  // Epoch ETA from the measured slot rate over the whole window — steadier than one minute, and
+  // still only ever presented as approximate.
+  const meanSlotsPerSec =
+    perf.slotsPerSec.length > 0
+      ? perf.slotsPerSec.reduce((a, b) => a + b, 0) / perf.slotsPerSec.length
+      : null;
+  const epochEtaSeconds =
+    slotIndex !== null && slotsInEpoch !== null && meanSlotsPerSec !== null && meanSlotsPerSec > 0
+      ? Math.max(0, Math.round((slotsInEpoch - slotIndex) / meanSlotsPerSec))
       : null;
 
   const votes = map.get('votes')?.result;
   const current = pick(votes, ['current']);
   const delinquent = pick(votes, ['delinquent']);
+  // Only the count was read before; the same payload also carries what is actually delegated.
+  const activatedStakeLamports = Array.isArray(current)
+    ? current.reduce((sum: number, v: unknown) => sum + (num(pick(v, ['activatedStake'])) ?? 0), 0)
+    : null;
+
+  const supplyLamports = num(pick(map.get('supply')?.result, ['value', 'total']));
 
   // A finalization stall is degraded, not down: blocks are still being produced.
   let status: HealthStatus = 'operational';
@@ -152,6 +240,7 @@ export function deriveChainHealth(map: Map<string, RpcRes>, latencyMs: number): 
     finalizationLag,
     epoch: num(pick(epochRes, ['epoch'])),
     epochProgressPct,
+    epochEtaSeconds,
     blockHeight: num(pick(epochRes, ['blockHeight'])),
     version: typeof version === 'string' ? version : null,
     slotsPerSec,
@@ -159,6 +248,9 @@ export function deriveChainHealth(map: Map<string, RpcRes>, latencyMs: number): 
     delinquentCount: Array.isArray(delinquent) ? delinquent.length : null,
     latencyMs: Math.round(latencyMs),
     note,
+    perf,
+    supplyLamports,
+    activatedStakeLamports,
   };
 }
 

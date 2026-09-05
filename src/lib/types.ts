@@ -95,6 +95,8 @@ export interface ChainHealth {
   finalizationLag: number | null;
   epoch: number | null;
   epochProgressPct: number | null;
+  /** Seconds until the epoch ends, from the measured slot rate. Approximate by construction. */
+  epochEtaSeconds: number | null;
   blockHeight: number | null;
   version: string | null;
   slotsPerSec: number | null;
@@ -102,6 +104,45 @@ export interface ChainHealth {
   delinquentCount: number | null;
   latencyMs: number;
   note: string | null;
+  /** The rolling performance window, oldest first, one entry per sample minute. */
+  perf: PerfWindow;
+  /** From getSupply, which rides the same batched health request. */
+  supplyLamports: number | null;
+  /** Summed getVoteAccounts activatedStake — stake actually delegated, not stake-pool reserve. */
+  activatedStakeLamports: number | null;
+}
+
+/**
+ * Derived from getRecentPerformanceSamples. Non-vote throughput is separated from total because
+ * this chain is overwhelmingly consensus votes: total TPS reads ~8.9 while actual user activity is
+ * two orders of magnitude below it, and reporting only the total would flatter the chain.
+ */
+export interface PerfWindow {
+  /** Minutes covered — the node caps the window, so this is not assumed to be 60. */
+  minutes: number;
+  slotsPerSec: number[];
+  nonVotePerMinute: number[];
+  /** Mean over the window, transactions per second. */
+  nonVoteTps: number | null;
+  totalTps: number | null;
+  /** Minutes in the window with exactly zero non-vote transactions. Computed, never assumed. */
+  zeroActivityMinutes: number;
+}
+
+/** One location COOK sits, for the capital map. `lamports` null = the source did not answer. */
+export interface CapitalBucket {
+  key: string;
+  label: string;
+  /** Names the on-chain source, and any caveat the label itself must not overstate. */
+  detail: string;
+  lamports: number | null;
+}
+
+export interface CapitalSnapshot {
+  supplyLamports: number | null;
+  buckets: CapitalBucket[];
+  cookUsd: number | null;
+  dexTvlUsd: number | null;
 }
 
 export interface TokenBalance {

@@ -25,6 +25,12 @@ Every shot is Cookie Chain mainnet against a production build. `docs/screenshots
 `portfolio.png`, `send.png` and `bridge.png` — Portfolio and Send show their connect-a-wallet state,
 because a populated one needs a funded wallet.
 
+They are regenerated with `npm run shots`, not taken by hand — the first set went nineteen commits
+stale and was still advertising a build without the sparklines, the capital map or the drawn mark.
+The script scrolls each route to the bottom and back before capturing, because everything below the
+fold sits at opacity 0 until its observer fires, and it exits non-zero if any reveal target is still
+hidden. It also forces `prefers-reduced-motion`, so two captures of the same route are identical.
+
 ---
 
 ## What it does
@@ -134,6 +140,7 @@ npm run typecheck     # tsc --noEmit
 npm test              # error mapping, confirmation verdicts, token-safety copy — no network
 npm run check:health  # the live health batch: one POST, its size, and every derived figure
 npm run smoke         # shape-checks every /api/* route against a running dev server
+npm run shots         # recapture docs/screenshots/ against a running production build
 ```
 
 `npm test` runs three suites that need no wallet and no network: `test:errors` (41 assertions over
@@ -146,6 +153,10 @@ that keep the token-safety copy factual).
 non-empty, that COOK's price is a number, that the markets feed carries TVL, and that a real
 COOK → top-volume-token quote comes back with a route. It defaults to `http://localhost:3000`;
 point it anywhere else — another port, or the deployed URL — with `BASE_URL=… npm run smoke`.
+
+`npm run shots` drives headless Chrome over CDP and takes the base URL as its argument
+(`npm run shots -- http://localhost:3000`). It adds no dependency: `chrome-launcher` is already in
+the tree and Node 22 ships a global `WebSocket`.
 
 ### Optional reference clone
 

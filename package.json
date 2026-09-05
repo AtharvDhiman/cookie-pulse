@@ -15,7 +15,8 @@
     "test:confirm": "tsx scripts/confirm.test.ts",
     "test": "npm run test:errors && npm run test:confirm && npm run test:safety",
     "check:health": "tsx scripts/health.check.ts",
-    "test:safety": "tsx scripts/safety.test.ts"
+    "test:safety": "tsx scripts/safety.test.ts",
+    "shots": "tsx scripts/shots.ts"
   },
   "dependencies": {
     "@solana/spl-token": "^0.4.9",

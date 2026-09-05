@@ -245,8 +245,24 @@ export function TokenPicker({ label, token, tokens, balances, loading, disabled,
                         <span className="flex items-center gap-1.5">
                           <span className="truncate text-sm font-semibold">{t.symbol}</span>
                           {t.mint === COOK_MINT ? <Pill tone="accent">Native</Pill> : null}
+                          {/* Counted over the whole 6,473-row registry, server-side — SESA is on
+                              4,452 of them, so a count taken from this 92-row list would be wrong
+                              by two orders of magnitude. Neutral by design: a shared symbol is a
+                              fact about naming, not an accusation. */}
+                          {t.symbolCount > 1 ? (
+                            <Pill tone="muted">
+                              {t.symbolCount.toLocaleString('en-US')} share this symbol
+                            </Pill>
+                          ) : null}
                         </span>
                         <span className="block truncate text-xs text-muted">{t.name}</span>
+                        {/* The full mint, not a truncation: when a symbol is not unique it is the
+                            only thing that actually identifies the token. */}
+                        {t.symbolCount > 1 ? (
+                          <span className="block truncate font-mono text-[10px] text-muted" title={t.mint}>
+                            {t.mint}
+                          </span>
+                        ) : null}
                       </span>
                       <span className="shrink-0 text-right">
                         {held > 0 ? (

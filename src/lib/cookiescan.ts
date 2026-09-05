@@ -33,8 +33,31 @@ function toToken(raw: unknown): Token | null {
     marketCap: num0(pick(raw, ['marketData', 'marketCap'])),
     supply: num0(pick(raw, ['marketData', 'supply'])),
     holderCount: num0(pick(raw, ['marketData', 'holderCount'])),
+    // Placeholder: the real figure needs every row, so `withSymbolCounts` fills it below.
+    symbolCount: 0,
   };
 }
+
+/**
+ * Stamps each token with how many registry entries share its symbol, counted across ALL rows.
+ *
+ * This has to happen server-side. The client holds a 92-row projection, and SESA alone appears on
+ * 4,452 rows — a collision count computed from what the browser has would be wrong by two orders of
+ * magnitude, and the picker's whole purpose is telling the user that a symbol is not unique.
+ */
+function withSymbolCounts(all: Token[]): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const t of all) {
+    const key = t.symbol.toLowerCase();
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  return counts;
+}
+
+const stampSymbolCount = (counts: Map<string, number>) => (t: Token): Token => ({
+  ...t,
+  symbolCount: counts.get(t.symbol.toLowerCase()) ?? 1,
+});
 
 /**
  * A priced row is the only kind any surface can rank, route through or value a holding against.
@@ -83,11 +106,6 @@ async function registryBody(): Promise<unknown> {
 }
 
 /**
- * Upstream ignores `limit`, `offset`, `page`, `sort`, `minLiquidity`, `priced` and `hasPrice`
- * (verified 5 Sep 2026), so the projection has to happen here. What it saves is the browser's
- * share: 2.7 MB down to ~35 KB.
- */
-/**
  * Identity for a named set of mints, whatever their price.
  *
  * The priced projection is the right default for every ranking surface, but it is a price feed, not
@@ -109,8 +127,9 @@ export async function fetchTokensByMint(mints: string[]): Promise<TokenRegistry>
   let nftLikeCount = 0;
   for (const t of all) if (isNftLike(t)) nftLikeCount++;
 
+  const counts = withSymbolCounts(all);
   return {
-    tokens: all.filter((t) => wanted.has(t.mint)).map(withoutDescription),
+    tokens: all.filter((t) => wanted.has(t.mint)).map(withoutDescription).map(stampSymbolCount(counts)),
     cookUsd: num(pick(json, ['cookUsd'])),
     count: num(pick(json, ['count'])) ?? all.length,
     fungibleCount: all.length - nftLikeCount,
@@ -119,6 +138,11 @@ export async function fetchTokensByMint(mints: string[]): Promise<TokenRegistry>
   };
 }
 
+/**
+ * Upstream ignores `limit`, `offset`, `page`, `sort`, `minLiquidity`, `priced` and `hasPrice`
+ * (verified 5 Sep 2026), so the projection has to happen here. What it saves is the browser's
+ * share: 2.7 MB down to ~35 KB.
+ */
 export async function fetchRegistry(view: RegistryView = 'priced'): Promise<TokenRegistry> {
   const json = await registryBody();
   const all = unwrap<unknown>(json, ['data', 'tokens'])
@@ -128,8 +152,11 @@ export async function fetchRegistry(view: RegistryView = 'priced'): Promise<Toke
   let nftLikeCount = 0;
   for (const t of all) if (isNftLike(t)) nftLikeCount++;
 
+  const counts = withSymbolCounts(all);
   return {
-    tokens: view === 'full' ? all : all.filter(isPriced).map(withoutDescription),
+    tokens: (view === 'full' ? all : all.filter(isPriced).map(withoutDescription)).map(
+      stampSymbolCount(counts),
+    ),
     // The registry response carries COOK USD at the top level — one fewer round trip.
     cookUsd: num(pick(json, ['cookUsd'])),
     // Counts describe the registry, never the projection: reading them off `tokens` would make the

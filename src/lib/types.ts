@@ -17,6 +17,14 @@ export interface Token {
   marketCap: number;
   supply: number;
   holderCount: number;
+  /**
+   * How many registry entries share this token's symbol, counted over the WHOLE registry (6,473
+   * rows), not over whatever projection the client happens to hold. SESA is on 4,452 of them, so a
+   * count derived from the 92-row priced view would understate collisions by two orders of
+   * magnitude — which is exactly the "app understates its own registry" failure the projection was
+   * warned about.
+   */
+  symbolCount: number;
 }
 
 /**

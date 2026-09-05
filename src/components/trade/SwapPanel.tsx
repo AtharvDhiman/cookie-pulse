@@ -27,7 +27,10 @@ import {
 } from '@/lib/config';
 import { formatAmount, formatUsd, fromRawAmount, shortAddr, toRawAmount } from '@/lib/format';
 import { PresentableError, type FriendlyError } from '@/lib/errors';
-import { rankableTokens, useRegistry, useTokenDirectory } from '@/hooks/useMarketData';
+import { rankableTokens, useMarkets, useRegistry, useTokenDirectory } from '@/hooks/useMarketData';
+import { useMintAudit } from '@/hooks/useMintAudit';
+import { assessImpostor } from '@/lib/impostor';
+import { describeMintFacts } from '@/lib/mintSafety';
 import type { Quote } from '@/lib/types';
 import { useCookBalance, useRefreshBalances, useTokenBalances } from '@/hooks/useBalances';
 import { useTransaction, type TxState } from '@/hooks/useTransaction';
@@ -360,6 +363,36 @@ export function SwapPanel({
   // quote it was about — no effect needed to expire it.
   const [lastCheck, setLastCheck] = useState<{ quote: Quote; check: RouteCheck } | null>(null);
   const routeCheck = lastCheck && lastCheck.quote === quote ? lastCheck.check : null;
+
+  const { audit } = useMintAudit();
+  const { data: marketsSnapshot } = useMarkets();
+
+  /** Pools per mint, from the markets cache — evidence for "which token wearing this symbol is used". */
+  const poolCountByMint = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const mk of marketsSnapshot?.markets ?? []) {
+      for (const mint of [mk.base.mint, mk.quote.mint]) {
+        if (mint) m.set(mint, (m.get(mint) ?? 0) + 1);
+      }
+    }
+    return m;
+  }, [marketsSnapshot]);
+
+  /**
+   * What the chain says about the token being received, stated as facts. Never a verdict: an open
+   * mint authority is normal for a liquid-staking token, and this panel has no way to know intent.
+   */
+  const outputNotes = useMemo(() => {
+    if (!outputToken) return [];
+    const facts = audit?.byMint.get(outputToken.mint) ?? null;
+    // Only claim "no account on chain" once the audit has actually answered for the others.
+    const mintAccountExists = audit ? !audit.missing.includes(outputToken.mint) : true;
+    const sameSymbol = tokens.filter(
+      (t) => t.symbol.toLowerCase() === outputToken.symbol.toLowerCase(),
+    );
+    const signal = assessImpostor({ token: outputToken, sameSymbol, poolCountByMint, mintAccountExists });
+    return [...(facts ? describeMintFacts(facts) : []), ...signal.notes];
+  }, [outputToken, audit, tokens, poolCountByMint]);
 
   const outAmount = quote && outputToken ? fromRawAmount(quote.netOutAmount, outputToken.decimals) : null;
   const minOut = quote && outputToken ? fromRawAmount(quote.minOutAmount, outputToken.decimals) : null;
@@ -743,6 +776,27 @@ export function SwapPanel({
               >
                 Retry
               </button>
+            </div>
+          ) : null}
+
+          {/* What the chain holds about the token being received. Facts with their source, never a
+              verdict — the words "unsafe", "scam" and "rug" appear nowhere in this app's copy. */}
+          {outputNotes.length > 0 && outputToken ? (
+            <div className="rounded-xl border border-hairline/10 bg-surface2/60 p-3">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-muted">
+                About {outputToken.symbol}
+              </p>
+              <ul className="mt-1.5 space-y-1">
+                {outputNotes.map((note) => (
+                  <li key={note} className="flex gap-1.5 text-xs leading-relaxed text-ink2">
+                    <span aria-hidden="true" className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-muted" />
+                    <span>{note}</span>
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-1.5 truncate font-mono text-[10px] text-muted" title={outputToken.mint}>
+                {outputToken.mint}
+              </p>
             </div>
           ) : null}
 

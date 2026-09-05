@@ -13,8 +13,9 @@
     "smoke": "tsx scripts/smoke.ts",
     "test:errors": "tsx scripts/errors.test.ts",
     "test:confirm": "tsx scripts/confirm.test.ts",
-    "test": "npm run test:errors && npm run test:confirm",
-    "check:health": "tsx scripts/health.check.ts"
+    "test": "npm run test:errors && npm run test:confirm && npm run test:safety",
+    "check:health": "tsx scripts/health.check.ts",
+    "test:safety": "tsx scripts/safety.test.ts"
   },
   "dependencies": {
     "@solana/spl-token": "^0.4.9",

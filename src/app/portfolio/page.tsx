@@ -10,6 +10,7 @@ import { useWalletModal } from '@solana/wallet-adapter-react-ui';
 import { ExternalLink, RefreshCw, Wallet } from 'lucide-react';
 import { COOK_DECIMALS, COOK_SYMBOL, explorerAddress } from '@/lib/config';
 import { formatAmount, formatUsd, shortAddr } from '@/lib/format';
+import { isNftLike } from '@/lib/normalize';
 import { useCookBalance, useRefreshBalances, useTokenBalances } from '@/hooks/useBalances';
 import { useRegistry } from '@/hooks/useMarketData';
 import { WALLET_TX_LIMIT } from '@/hooks/useWalletTransactions';
@@ -98,8 +99,14 @@ export default function PortfolioPage() {
   // Anything the registry cannot price contributes nothing to the total — including COOK itself if
   // its feed is down. Name how many were left out rather than presenting a confident figure that
   // quietly omits them — the overwhelming majority of registry mints carry no price at all.
+  // NFTs are token accounts too, and they have their own grid below. Counting them here would tell
+  // a wallet holding five collectibles that the total "excludes 5 unpriced holdings", which reads as
+  // missing money rather than as art.
+  const unpricedFungibles = (balances ?? []).filter(
+    (b) => b.valueUsd === null && !(b.token && isNftLike(b.token)),
+  ).length;
   const unpricedCount =
-    (balances ?? []).length - pricedCount + (cookValueUsd === null && (cookAmount ?? 0) > 0 ? 1 : 0);
+    unpricedFungibles + (cookValueUsd === null && (cookAmount ?? 0) > 0 ? 1 : 0);
   const totalNote =
     totalUsd !== null && unpricedCount > 0
       ? `excludes ${unpricedCount} unpriced holding${unpricedCount === 1 ? '' : 's'}`

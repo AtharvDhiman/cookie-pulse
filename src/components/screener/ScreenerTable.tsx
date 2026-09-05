@@ -270,8 +270,19 @@ export function ScreenerTable({ rows, sort, onSort, isLoading, emptyTitle, empty
                   <div className="flex items-center gap-2">
                     <TokenLogo logo={t.logo} symbol={t.symbol} size={26} />
                     <div className="min-w-0">
-                      <p className="truncate text-[13px] font-semibold leading-tight text-ink">
-                        {t.symbol}
+                      <p className="flex items-center gap-1.5 truncate text-[13px] font-semibold leading-tight text-ink">
+                        <span className="truncate">{t.symbol}</span>
+                        {/* Rides the token cell rather than becoming a tenth column: the table is
+                            already min-w-[1020px], and a new column would push Liquidity and
+                            Holders further off a phone. Neutral count, no verdict. */}
+                        {t.symbolCount > 1 ? (
+                          <span
+                            title={`${t.symbolCount.toLocaleString('en-US')} registry entries use the symbol ${t.symbol} — check the mint`}
+                            className="shrink-0 rounded-full border border-hairline/10 bg-surface2 px-1.5 py-px text-[10px] font-semibold tabular-nums text-muted"
+                          >
+                            ×{t.symbolCount.toLocaleString('en-US')}
+                          </span>
+                        ) : null}
                       </p>
                       <p className="truncate text-[11px] leading-tight text-muted" title={t.name}>
                         {t.name}

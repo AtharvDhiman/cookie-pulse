@@ -16,10 +16,14 @@ mainnet — no mock data anywhere in this repo.
 
 | | |
 | --- | --- |
-| ![Overview](docs/screenshots/overview.png) | ![Screener](docs/screenshots/screener.png) |
-| Overview — chain health, movers, TVL, live activity | Screener — every token on Cookie Chain |
-| ![Trade](docs/screenshots/trade.png) | ![Portfolio](docs/screenshots/portfolio.png) |
-| Trade — routed swaps with the full path shown | Portfolio — balances, NFTs, history |
+| ![Overview](docs/screenshots/overview.png) | ![Analytics](docs/screenshots/dashboard.png) |
+| Overview — live chain stats above the dashboard | Analytics — health strip, TVL by venue, movers, activity feed |
+| ![Screener](docs/screenshots/screener.png) | ![Trade](docs/screenshots/trade.png) |
+| Screener — all 6,473 registry tokens, sortable | Trade — a live Cookiebox quote split across three pools |
+
+Every shot is Cookie Chain mainnet against a production build. `docs/screenshots/` also carries
+`portfolio.png`, `send.png` and `bridge.png` — Portfolio and Send show their connect-a-wallet state,
+because a populated one needs a funded wallet.
 
 ---
 
@@ -103,7 +107,8 @@ npm run smoke      # shape-checks every /api/* route against a running dev serve
 
 `npm run smoke` needs `npm run dev` running in another terminal. It asserts that the registry is
 non-empty, that COOK's price is a number, that the markets feed carries TVL, and that a real
-COOK → top-volume-token quote comes back with a route.
+COOK → top-volume-token quote comes back with a route. It defaults to `http://localhost:3000`;
+point it anywhere else — another port, or the deployed URL — with `BASE_URL=… npm run smoke`.
 
 ### Optional reference clone
 
@@ -247,7 +252,8 @@ order — total cost is a fraction of a cent.
 **Presentation**
 - [ ] All six routes at 360px wide — no sideways scrolling of the page itself.
 - [ ] Light/dark toggle on every route.
-- [ ] Capture `docs/screenshots/{overview,screener,trade,portfolio}.png` for the README.
+- [ ] Retake `docs/screenshots/portfolio.png` with Nightly connected — the committed shot is
+      the connect-a-wallet state, which is all that can be captured without a funded wallet.
 
 > If something fails, the fastest useful report is: **which page, what you clicked, the exact toast
 > text, and the browser console error.**

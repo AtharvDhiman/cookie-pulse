@@ -45,7 +45,9 @@ function ChainStatus() {
           theme toggle and wallet button left every 15 seconds. The text itself never transitions —
           a fade on a number that is telling you nothing changed reads as a rendering bug. */}
       {data?.latencyMs ? (
-        <span className="inline-block min-w-[3.25rem] text-right tabular-nums text-muted">
+        // `normal-case` because the pill capitalizes its status word, which was also turning
+        // "205 ms" into "205 Ms".
+        <span className="inline-block min-w-[3.25rem] text-right normal-case tabular-nums text-muted">
           {data.latencyMs} ms
         </span>
       ) : null}

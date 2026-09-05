@@ -53,10 +53,44 @@ export function useReveal<T extends HTMLElement = HTMLDivElement>(index?: number
       return;
     }
 
+    /** Already within the armed fold — the same box the observer's rootMargin describes. */
+    const inArmedFold = () => {
+      const r = el.getBoundingClientRect();
+      return r.top < window.innerHeight * 1.15 && r.bottom > 0;
+    };
+
+    // Anything on screen at mount is shown without waiting to be told. The transition still runs
+    // (the unshown state has already painted by the time an effect fires), so the gesture is
+    // unchanged — but content the user is looking at no longer depends on a callback arriving.
+    if (inArmedFold()) {
+      el.dataset.shown = '';
+      return;
+    }
+
     // Cancels the CSS failsafe — the observer has taken responsibility for this element.
     el.dataset.armed = '';
     io.observe(el);
-    return () => io.unobserve(el);
+
+    // Watchdog for the case the CSS failsafe no longer covers: an observer that is constructed but
+    // never delivers, which happens in throttled, occluded and embedded contexts. Deliberately
+    // gated on being in view — a blanket timer would reveal the whole page and defeat the system;
+    // this only ever rescues something the user can actually see sitting at opacity 0.
+    const watchdog = window.setInterval(() => {
+      if (el.dataset.shown !== undefined) {
+        window.clearInterval(watchdog);
+        return;
+      }
+      if (inArmedFold()) {
+        el.dataset.shown = '';
+        io.unobserve(el);
+        window.clearInterval(watchdog);
+      }
+    }, 1_000);
+
+    return () => {
+      window.clearInterval(watchdog);
+      io.unobserve(el);
+    };
   }, []);
 
   const revealProps: RevealProps =

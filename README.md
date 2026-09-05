@@ -37,7 +37,7 @@ because a populated one needs a funded wallet.
 | Transaction confirmation handling | `useTransaction` | `confirmTransaction` with the builder's `blockhash` + `lastValidBlockHeight`, at `confirmed` |
 | Error handling and user feedback | `useTransaction`, `lib/errors.ts` | One toast through six states; every failure mapped to plain language, with simulation logs |
 | View app-specific data and activity | `/portfolio`, Activity panel | Balances across both token programs, NFTs via DAS, last 20 transactions, live DEX feed |
-| Analytics, dashboards | `/`, `/screener` | Chain health, movers, TVL by venue, sortable 6,470-token screener |
+| Analytics, dashboards | `/`, `/screener` | Chain health, non-vote TPS, 60-minute sparklines, the capital map, movers, TVL by venue, and a sortable screener over the whole registry |
 | Use existing Cookie Chain programs | `/trade` | Cookiebox aggregator routes through Cookiebox DAMM/CLMM and Cookieswap pools |
 | Cookiebox / Cookiescan / DAS / cookie-mcp | throughout | Cookiebox agg for swaps, Cookiescan REST + DAS for data, cookie-mcp logic ported and credited |
 | Deployed and publicly accessible | Vercel | Runs with zero configuration — every env var has a working default |
@@ -45,19 +45,45 @@ because a populated one needs a funded wallet.
 
 ### The six routes
 
-1. **`/` Overview** — chain health from *one* batched JSON-RPC request (status, slots/sec,
-   finalization lag, validators, RPC latency), COOK price, top gainers / losers / volume, total TVL
-   with a per-venue breakdown, and a live activity feed across all five DEX programs.
-2. **`/screener`** — all 6,470 registry tokens: price, 24h change, volume, liquidity, market cap,
-   holders. Search, sortable columns, click-to-copy mints, one-click through to a pre-filled trade.
+1. **`/` Overview** — chain health from *one* batched JSON-RPC request: status, slots/sec,
+   finalization lag, validators, RPC latency, **non-vote TPS beside total TPS**, an epoch ETA, and
+   two 60-minute inline-SVG sparklines. Plus COOK price, movers, TVL by venue, a live activity feed
+   across all five DEX programs, and the **capital map**.
+2. **`/screener`** — the whole registry: price, 24h change, volume, liquidity, market cap, holders,
+   and a neutral badge when a symbol is shared by other mints. Search by name, symbol or mint,
+   sortable columns, click-to-copy mints, one-click through to a pre-filled trade.
 3. **`/portfolio`** — COOK plus every SPL **and** Token-2022 balance priced in USD, NFTs via the DAS
    API, and your last 20 transactions with fees and explorer links.
 4. **`/send`** — send COOK or any token you hold, with an optional memo. Address validation, MAX with
    a fee reserve, decimal-exact amounts.
 5. **`/trade`** — swap panel with searchable token pickers, slippage chips, a debounced quote that
-   refreshes while idle, and the full route displayed (venues, hops, split %) before you sign.
+   refreshes while idle, the full route (venues, hops, split %) before you sign, on-chain facts about
+   the token you are receiving, and a confirmed card that outlives the toast.
 6. **`/bridge`** — a four-step "how to get COOK" guide with a copy button on every value. A banner
    links here from every page whenever a connected wallet holds no COOK.
+
+### Three things worth opening the app for
+
+**The WebSocket was pointed at a dead host.** `wss://wss.cookiescan.io` — the endpoint the brief
+states as fact — serves a TLS certificate for an unrelated domain and never upgrades. Measured
+through this repo's own `@solana/web3.js`: **0 slot events in 10 s against 17 from
+`wss://rpc.cookiescan.io`**, with six `Hostname/IP does not match certificate's altnames` errors.
+`confirmTransaction`'s status fallback is gated behind a subscription that never resolves on that
+socket, so every successful transaction was heading for a timeout. Fixed, and documented in
+[`NOTES.md`](NOTES.md).
+
+**Every transaction resolves to a definite outcome.** Landed, failed on-chain, or never seen —
+never "it may have worked". A blockhash-strategy confirm runs as a backstop while a throttled
+`getSignatureStatuses` poll races it. "Never seen" is the only verdict whose UI says it is safe to
+send again, so it requires two consecutive corroborating rounds and re-reads the status *after*
+observing the blockhash die — a transaction that lands between those two calls must not be reported
+as missing.
+
+**The capital map answers "why does this chain look empty".** The DEX pools this app reports as TVL
+are the smallest bucket on the chain: the bCOOK stake pool alone holds ~125M COOK against ~$8K of
+DEX liquidity. Every row names its on-chain source, the stake pool's undelegated reserve is called a
+reserve rather than "staked", a source that fails renders "unavailable" rather than zero, and the
+card states what share of supply it actually accounts for instead of implying the buckets sum to it.
 
 ---
 
@@ -99,11 +125,19 @@ Open <http://localhost:3000>. **No `.env` is needed** — every variable default
 Chain endpoints. Copy `.env.example` to `.env.local` only if you want to point somewhere else.
 
 ```bash
-npm run build      # production build
-npm run lint       # eslint
-npm run typecheck  # tsc --noEmit
-npm run smoke      # shape-checks every /api/* route against a running dev server
+npm run build         # production build
+npm run lint          # eslint
+npm run typecheck     # tsc --noEmit
+npm test              # error mapping, confirmation verdicts, token-safety copy — no network
+npm run check:health  # the live health batch: one POST, its size, and every derived figure
+npm run smoke         # shape-checks every /api/* route against a running dev server
 ```
+
+`npm test` runs three suites that need no wallet and no network: `test:errors` (41 assertions over
+the error mapping, including that a router's custom error 1 is not reported as "not enough COOK"),
+`test:confirm` (12, including a regression guard that the confirmation poll stays throttled — it
+once issued millions of requests once its backstop settled), and `test:safety` (13, over the rules
+that keep the token-safety copy factual).
 
 `npm run smoke` needs `npm run dev` running in another terminal. It asserts that the registry is
 non-empty, that COOK's price is a number, that the markets feed carries TVL, and that a real

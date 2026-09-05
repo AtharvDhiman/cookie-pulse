@@ -215,3 +215,53 @@ Implementation notes:
   bCOOK liquidity renders `$3.74K` (it would have been `$0.46` under the brief's COOK assumption),
   and the activity feed lists real signatures from Cookiebox DAMM and Cookieswap xYBN.
 - **Not verified:** anything requiring a signature. See the wallet test checklist in the README.
+
+## Motion system
+
+The full design lives in `docs/handoff/motion/`. Two decisions there are worth restating here,
+because both look like mistakes until you know why.
+
+### Zero new dependencies, deviating from the written contract
+
+`docs/handoff/motion/_CONTRACT.md` specifies `framer-motion@13.2.0`, scoped behind `next/dynamic` so
+it loads only when the trade token picker opens. `docs/handoff/HANDOFF.md` overrides that: the
+shipped decision is **no new dependencies at all**. Everything is CSS plus three small hooks
+(`useReveal`, `useScrollShell`, `useCountUp`). The override wins because it is the later decision and
+because the library was buying one modal transition.
+
+Consequence: `grep -rn "framer-motion" src/` returns nothing, and every route's first-load JS is
+unchanged by the motion layer.
+
+### Reveals must never depend on a callback arriving
+
+The reveal contract hides below-fold content in CSS and shows it when an `IntersectionObserver`
+stamps `data-shown`. A `data-armed` attribute cancels a 3-second CSS failsafe once the observer takes
+responsibility for an element.
+
+That left a real hole: if the observer is *constructed* but never *delivers*, the failsafe is already
+cancelled and the content stays at `opacity: 0` forever. This is not theoretical — it reproduced in
+an automated browser context here, where a freshly constructed observer with identical options never
+fired either, alongside `requestAnimationFrame` never running. Throttled, occluded and embedded
+webviews behave the same way.
+
+Two changes close it, both in `src/hooks/useReveal.ts`:
+
+1. Anything already inside the armed fold at mount is shown immediately rather than waiting to be
+   told. The transition still runs, because the hidden state has painted by the time an effect fires,
+   so the gesture is unchanged.
+2. A watchdog re-checks once a second and shows an element that is *in view* but still hidden. It is
+   deliberately gated on visibility — a blanket timer would reveal the whole page and defeat the
+   system, which is exactly what the cancelled CSS failsafe was avoiding.
+
+### What could not be verified from this machine
+
+The scroll-driven half of the system — ambient parallax, the header scrim, the haste governor and the
+progress hairline — is driven by one `requestAnimationFrame` loop in `useScrollShell`. In the
+automation browser available here, `rAF` and `scroll` events never fire, so the loop parks after its
+first frame and none of it can be observed. What *was* verified: the CSS contract by inspection, that
+the server HTML carries no inline `opacity: 0` or `transform` (so no card can render blank on a slow
+bundle), that every new keyframe sits inside the `prefers-reduced-motion: no-preference` gate, and
+that reveals resolve correctly for on-screen content.
+
+The choreography itself needs a real browser, and belongs on the same manual checklist as the wallet
+flows.

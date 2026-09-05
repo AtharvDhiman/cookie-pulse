@@ -43,8 +43,12 @@ export function Button({
       // A pending transaction must not be re-submittable, so `loading` disables on its own.
       disabled={disabled || loading}
       className={cn(
-        'inline-flex items-center justify-center gap-2 rounded-xl font-semibold transition-all duration-150',
-        'disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none disabled:hover:brightness-100',
+        // Explicit property list, not `transition-all`: that swept in the primary variant's 24px
+        // accent box-shadow and its hover brightness filter, repainting a gradient-filled element
+        // every frame on the most-pressed control in the app.
+        'inline-flex items-center justify-center gap-2 rounded-xl font-semibold',
+        'press transition-[transform,filter,background-color,border-color,color,box-shadow,opacity] duration-150 ease-[cubic-bezier(.2,.7,.3,1)]',
+        'disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none disabled:hover:brightness-100 disabled:active:scale-100',
         VARIANTS[variant],
         SIZES[size],
         className,

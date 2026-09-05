@@ -7,6 +7,7 @@ import { ThemeProvider } from '@/providers/ThemeProvider';
 import { Header } from '@/components/Header';
 import { Footer } from '@/components/Footer';
 import { ZeroCookBanner } from '@/components/ZeroCookBanner';
+import { GateScript } from '@/components/motion/GateScript';
 import './globals.css';
 
 // Self-hosted by next/font, so there is no render-blocking request to fonts.googleapis.com and no
@@ -52,6 +53,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     >
       {/* `isolate` gives the ambient layer a stacking context to sit behind without escaping. */}
       <body className="isolate flex min-h-screen flex-col bg-ground text-ink antialiased">
+        {/* First child, and blocking on purpose: it adds `.js` before anything paints, which is
+            what lets every hidden pre-animation state be gated on that class. Also applies the
+            stored theme pre-paint, removing the light-theme flash. */}
+        <GateScript />
         <div className="ambient" aria-hidden="true" />
         <ThemeProvider>
           <QueryProvider>

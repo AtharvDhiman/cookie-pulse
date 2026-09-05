@@ -3,7 +3,15 @@
 // Dark by default. The choice is stored per browser and applied as a `.light` class on <html>,
 // which the palette in globals.css keys off. Reads are wrapped because storage throws outright in
 // some embedded contexts.
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
 
 type Theme = 'dark' | 'light';
 
@@ -15,24 +23,24 @@ const ThemeContext = createContext<{ theme: Theme; toggle: () => void }>({
 
 export const useTheme = () => useContext(ThemeContext);
 
-function readStored(): Theme | null {
-  try {
-    const v = window.localStorage.getItem(STORAGE_KEY);
-    return v === 'light' || v === 'dark' ? v : null;
-  } catch {
-    return null;
-  }
-}
-
 export function ThemeProvider({ children }: { children: ReactNode }) {
+  // Starts at 'dark' on both server and client so hydration matches, then adopts whatever the
+  // GateScript already put on <html> pre-paint.
   const [theme, setTheme] = useState<Theme>('dark');
+  const applied = useRef(false);
 
   useEffect(() => {
-    const stored = readStored();
-    if (stored) setTheme(stored);
+    setTheme(document.documentElement.classList.contains('light') ? 'light' : 'dark');
   }, []);
 
   useEffect(() => {
+    // Skipped on the first pass: at that point `theme` is still the placeholder, and writing it
+    // would strip the class the GateScript set before first paint — a visible flash for anyone
+    // whose stored theme is light.
+    if (!applied.current) {
+      applied.current = true;
+      return;
+    }
     document.documentElement.classList.toggle('light', theme === 'light');
     try {
       window.localStorage.setItem(STORAGE_KEY, theme);

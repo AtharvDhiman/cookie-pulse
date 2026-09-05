@@ -45,12 +45,30 @@ const config: Config = {
           '0%, 100%': { opacity: '1' },
           '50%': { opacity: '0.35' },
         },
+        // Acknowledging a tap — the only overshoot in the system, and only on small controls.
+        'check-pop': {
+          from: { opacity: '0', transform: 'scale(.6)' },
+          to: { opacity: '1', transform: 'none' },
+        },
+        // One outward ping when a status genuinely changes. Never on a poll.
+        'ping-once': {
+          from: { opacity: '0.55', transform: 'scale(1)' },
+          to: { opacity: '0', transform: 'scale(2.6)' },
+        },
+        // The delta wash: a pseudo-element that fades out over a row that is genuinely new.
+        'row-arrive': {
+          from: { opacity: '1' },
+          to: { opacity: '0' },
+        },
       },
       animation: {
         shimmer: 'shimmer 1.6s infinite',
         'fade-in': 'fade-in .2s ease-out',
         'rise-in': 'rise-in .35s cubic-bezier(.2,.7,.3,1) both',
         'pulse-dot': 'pulse-dot 2.4s ease-in-out infinite',
+        'check-pop': 'check-pop 220ms cubic-bezier(.34,1.32,.64,1) both',
+        'ping-once': 'ping-once 620ms cubic-bezier(.2,.7,.3,1) forwards',
+        'row-arrive': 'row-arrive 900ms cubic-bezier(.2,.7,.3,1) forwards',
       },
     },
   },

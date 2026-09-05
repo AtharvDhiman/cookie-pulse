@@ -42,6 +42,48 @@
 
   --shadow-card: 0 1px 0 0 rgb(255 255 255 / 0.04) inset, 0 12px 32px -18px rgb(0 0 0 / 0.9);
   --shadow-lift: 0 20px 50px -24px rgb(0 0 0 / 0.95);
+
+  /* ── Motion tokens ──────────────────────────────────────────────────────────────────────────
+     Colour-independent, so `.light` does not redeclare them. Nothing in the app invents its own
+     duration, easing or distance: one deceleration curve carries every reveal, enter and release,
+     which is what makes eleven surfaces read as one system rather than eleven.
+     ───────────────────────────────────────────────────────────────────────────────────────── */
+
+  /* The house curve. Already the easing on `rise-in`, so new and existing motion decelerate alike. */
+  --ease-lead: cubic-bezier(0.2, 0.7, 0.3, 1);
+  --ease-settle: cubic-bezier(0.16, 1, 0.3, 1);
+  /* Peaks ~1.06. The entire overshoot budget: three elements, all small, all acknowledging a tap. */
+  --ease-detent: cubic-bezier(0.34, 1.32, 0.64, 1);
+  /* Press-down is flat on purpose — contact should feel rigid. The mass lives in the release. */
+  --ease-press: cubic-bezier(0.3, 0, 0.7, 1);
+
+  --dur-press: 90ms;
+  --dur-ui: 160ms;
+  --dur-state: 180ms;
+  --dur-scrim: 220ms;
+  --dur-route: 240ms;
+  --dur-row: 380ms;
+  --dur-enter: 420ms;
+  --dur-reveal: 460ms;
+  --dur-draw: 700ms;
+  --dur-signal: 900ms;
+
+  --rise-block: 16px;
+  --rise-card: 14px;
+  --rise-enter: 12px;
+  --rise-row: 8px;
+
+  --lift-hover: 1px;
+  --lift-weight: 3px;
+  --nudge: 2px;
+
+  --press-lg: 0.97;
+  --press-sm: 0.94;
+  --press-wide: 0.985;
+
+  --beat-section: 90ms;
+  --beat-sibling: 45ms;
+  --beat-enter: 60ms;
 }
 
 .light {
@@ -101,12 +143,14 @@ body {
    painted behind everything via a negative z-index on an isolated root stacking context. */
 .ambient {
   position: fixed;
-  inset: 0;
+  /* Vertical overscan: the layer drifts up to 64px, and the overscan means that drift can never
+     expose an unpainted edge at the bottom of the viewport. */
+  inset: -96px 0;
   z-index: -1;
   pointer-events: none;
   background:
     radial-gradient(
-      68rem 40rem at 50% -12%,
+      68rem 40rem at 50% -10%,
       rgb(var(--glow-a) / var(--glow-strength)),
       transparent 62%
     ),
@@ -228,6 +272,223 @@ body {
   background: rgb(var(--surface-2)) !important;
 }
 
+/* ── Motion ───────────────────────────────────────────────────────────────────────────────────
+   Every piece of choreography lives inside `prefers-reduced-motion: no-preference`, so reduced
+   motion is the ABSENCE of a matching rule rather than a runtime undo — no state to unwind, no
+   race to lose.
+
+   Every hidden pre-animation state is additionally gated on `html.js`, a class only the inline
+   GateScript adds. No JavaScript, or a bundle that never arrives, means nothing was ever hidden.
+   ─────────────────────────────────────────────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: no-preference) {
+  /* Below the fold: an IntersectionObserver stamps [data-shown]. A transition, never an animation
+     — a node remounted inside an already-shown container has no before-change style, so nothing
+     runs and it appears instantly at its final state. That makes every remount site in the app
+     (skeleton swaps, error flips, list churn) safe by construction rather than by discipline. */
+  html.js [data-reveal] {
+    transition:
+      opacity var(--dur-reveal) var(--ease-lead) calc(min(var(--i, 0), 4) * var(--beat-section)),
+      transform var(--dur-reveal) var(--ease-lead) calc(min(var(--i, 0), 4) * var(--beat-section));
+  }
+  html.js [data-reveal]:not([data-shown]) {
+    opacity: 0;
+    transform: translateY(var(--rise-card));
+    /* Scripting on but the bundle dead: content still appears, at 3s. Cancelled the moment the
+       observer takes charge of this element. */
+    animation: reveal-failsafe 1ms linear 3000ms forwards;
+  }
+  html.js [data-reveal][data-armed]:not([data-shown]) {
+    animation: none;
+  }
+  html.js [data-reveal][data-shown] {
+    opacity: 1;
+    transform: none;
+  }
+  /* Keyboard focus must never land on an invisible element. */
+  html.js [data-reveal]:focus-within {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+
+  /* Hunting rather than reading: shorten and unstagger. This can only ever make the site faster. */
+  html[data-haste] [data-reveal] {
+    transition-duration: 200ms;
+    transition-delay: 0ms;
+  }
+
+  html.js [data-reveal] [data-stagger] {
+    opacity: 0;
+    transform: translateY(var(--rise-row));
+    transition:
+      opacity var(--dur-row) var(--ease-lead) calc(min(var(--i, 0), 6) * var(--beat-sibling)),
+      transform var(--dur-row) var(--ease-lead) calc(min(var(--i, 0), 6) * var(--beat-sibling));
+  }
+  html.js [data-reveal] [data-stagger='fade'] {
+    transform: none;
+  }
+  html.js [data-reveal][data-shown] [data-stagger] {
+    opacity: 1;
+    transform: none;
+  }
+
+  /* Above the fold: a self-completing animation that begins during HTML parse and finishes whether
+     or not React hydrates. An observer here would ship a blank hero on slow JS. */
+  html.js [data-enter] {
+    animation: enter-rise var(--dur-enter) var(--ease-lead) both;
+    animation-delay: calc(min(var(--i, 0), 4) * var(--beat-enter));
+  }
+
+  html.js .route-enter {
+    animation: fade-in var(--dur-route) var(--ease-lead) backwards;
+  }
+  html.js .enter-fade {
+    animation: fade-in 200ms ease-out both;
+  }
+
+  /* Every keyframe ends at `transform: none`, never `translateY(0)`: none drops the compositor
+     layer and re-rasterises glyphs at device resolution, while a zero offset can leave a promoted
+     layer and permanently soft display type. */
+  @keyframes reveal-failsafe {
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  @keyframes enter-rise {
+    from {
+      opacity: 0;
+      transform: translateY(var(--rise-enter));
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  /* Ambient parallax. Two layers chasing the same scroll position at different rates, so the
+     separation comes from differential inertia — flick fast and the glow visibly falls behind and
+     catches up. A scroll-linked timeline, being a pure function of position, cannot do that. */
+  .ambient {
+    transform: translate3d(0, var(--amb-y, 0px), 0);
+  }
+  .ambient::after {
+    transform: translate3d(0, var(--amb-grid-y, 0px), 0);
+  }
+
+  /* One press model for the entire app — by far the most-triggered motion in it. */
+  .press {
+    transition: transform var(--dur-scrim) var(--ease-lead);
+  }
+  .press:active {
+    transform: scale(var(--press-lg));
+    transition-duration: var(--dur-press);
+    transition-timing-function: var(--ease-press);
+  }
+  .press-sm:active {
+    transform: scale(var(--press-sm));
+  }
+  .press-wide:active {
+    transform: scale(var(--press-wide));
+  }
+  .press:disabled:active {
+    transform: none;
+  }
+
+  .pw:not([data-pw-active]) .pw-inner {
+    transition: transform var(--dur-scrim) var(--ease-lead);
+  }
+}
+
+/* The sticky header's scrim, driven by the attribute useScrollShell maintains. Opacity only:
+   animating the header's own background-color repaints a backdrop-filtered strip every frame.
+   Scoped to `.site-header` because page-level <header> elements exist on five routes. */
+.site-header::before,
+.site-header::after {
+  content: '';
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--dur-scrim) var(--ease-lead);
+}
+.site-header::before {
+  inset: 0;
+  z-index: -1;
+  background: rgb(var(--ground));
+}
+.site-header::after {
+  left: 0;
+  right: 0;
+  top: 100%;
+  height: 24px;
+  background: linear-gradient(to bottom, rgb(var(--ground) / 0.45), transparent);
+}
+html[data-scrolled] .site-header::before {
+  opacity: 0.68;
+}
+html[data-scrolled] .site-header::after {
+  opacity: 1;
+}
+
+/* Scroll progress hairline. Absent until a route has real runway — a bar that is always full is
+   worse than no bar. */
+.scroll-progress {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 2px;
+  opacity: 0;
+  pointer-events: none;
+}
+html[data-scrollable] .scroll-progress {
+  opacity: 1;
+}
+.scroll-progress > span {
+  display: block;
+  height: 100%;
+  transform: scaleX(var(--scroll-progress, 0));
+  transform-origin: 0 50%;
+  background-image: linear-gradient(90deg, rgb(var(--accent)), rgb(var(--accent-2)));
+  /* The only will-change in the app: this genuinely animates the whole time the user scrolls. */
+  will-change: transform;
+}
+
+/* Pointer weight — the /bridge step cards, and nothing else. */
+.pw {
+  perspective: 900px;
+}
+.pw-inner {
+  position: relative;
+  transform: rotateX(var(--pw-rx, 0deg)) rotateY(var(--pw-ry, 0deg))
+    translateY(var(--pw-lift, 0px));
+}
+.pw-inner::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: 1rem;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity var(--dur-scrim) var(--ease-lead);
+  background: radial-gradient(
+    18rem 18rem at var(--pw-x, 50%) var(--pw-y, 50%),
+    rgb(var(--accent) / 0.09),
+    transparent 70%
+  );
+}
+.pw[data-pw-active] .pw-inner::before {
+  opacity: 1;
+}
+
+/* Clips exactly like overflow:hidden and respects border-radius, but is explicitly NOT a scroll
+   container, so sticky descendants keep resolving against the viewport. */
+.card-clip {
+  overflow: hidden;
+  overflow: clip;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -235,6 +496,16 @@ body {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+    /* Delays were missing, and their absence was a real bug: a `both`-filled staggered element
+       stayed invisible for its full delay and then snapped — strictly worse than no motion. */
+    animation-delay: 0ms !important;
+    transition-delay: 0ms !important;
+    /* A progress-driven timeline has no duration to zero out. */
+    animation-timeline: none !important;
     scroll-behavior: auto !important;
+  }
+
+  .scroll-progress {
+    display: none;
   }
 }

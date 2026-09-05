@@ -15,7 +15,7 @@ import { CapitalMap } from '@/components/overview/CapitalMap';
 import { HealthStrip } from '@/components/overview/HealthStrip';
 import { Hero } from '@/components/overview/Hero';
 import { MoversTiles } from '@/components/overview/MoversTiles';
-import { Card, Change, EmptyState, Skeleton } from '@/components/ui/primitives';
+import { LABEL_MUTED, Card, Change, EmptyState, Skeleton } from '@/components/ui/primitives';
 
 function CardLink({ href, children }: { href: string; children: ReactNode }) {
   return (
@@ -31,7 +31,7 @@ function CardLink({ href, children }: { href: string; children: ReactNode }) {
 function CardHeading({ title, cta }: { title: string; cta: string }) {
   return (
     <div className="flex items-center justify-between gap-2">
-      <h2 className="text-[11px] font-semibold uppercase tracking-wider text-muted">{title}</h2>
+      <h2 className={LABEL_MUTED}>{title}</h2>
       <span className="inline-flex shrink-0 items-center gap-0.5 text-[11px] font-semibold text-muted transition-colors group-hover:text-accent">
         {cta}
         {/* The arrow moves, the card does not. These are panels the user hovers in order to READ a
@@ -214,15 +214,16 @@ export default function OverviewPage() {
 
         <HealthStrip />
 
+        {/* Above the price/TVL row, not below it. The hero already states the price and the TVL,
+            so that row restates the first screen; the capital map is the thing no other submission
+            has, and it was sitting 1.4 screens down. */}
+        <CapitalMapSection />
+
         <div className="grid gap-4 lg:grid-cols-3">
           <CookPriceCard />
           {/* TvlCard declares its own lg:col-span-2, so it must be a direct grid child. */}
           <TvlCard />
         </div>
-
-        {/* Sits directly under the TVL card on purpose: the two answer the same question, and this
-            one supplies the context that stops $8.1K reading as the whole chain. */}
-        <CapitalMapSection />
 
         <MoversTiles />
 

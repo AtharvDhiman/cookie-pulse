@@ -1,6 +1,7 @@
 'use client';
 
-import type { ButtonHTMLAttributes, ReactNode } from 'react';
+import type { AnchorHTMLAttributes, ButtonHTMLAttributes, ReactNode } from 'react';
+import Link from 'next/link';
 import { Loader2 } from 'lucide-react';
 import { cn } from './primitives';
 
@@ -28,6 +29,64 @@ const SIZES: Record<Size, string> = {
   md: 'px-4 py-2.5 text-sm',
 };
 
+// Explicit property list, not `transition-all`: that swept in the primary variant's 24px accent
+// box-shadow and its hover brightness filter, repainting a gradient-filled element every frame on
+// the most-pressed control in the app.
+const BASE =
+  'inline-flex items-center justify-center gap-2 rounded-xl font-semibold press transition-[transform,filter,background-color,border-color,color,box-shadow,opacity] duration-150 ease-[cubic-bezier(.2,.7,.3,1)]';
+
+/**
+ * The button treatment as a class string, for the cases that cannot be a <button>.
+ *
+ * This exists because three navigation CTAs — the hero's "Start trading", /bridge's two, and the
+ * 404's — each re-typed the gradient, the glow radius, the padding and the easing by hand, and all
+ * four had drifted: three different box-shadow spreads, three paddings for the same visual weight,
+ * and two different transition property lists. A primary action must look the same whether it
+ * submits a transaction or navigates.
+ */
+export function buttonClass({
+  variant = 'primary',
+  size = 'md',
+  className,
+}: { variant?: Variant; size?: Size; className?: string } = {}): string {
+  return cn(BASE, VARIANTS[variant], SIZES[size], className);
+}
+
+/**
+ * A link wearing the button treatment. Lifts 1px on hover, which <button> deliberately does not:
+ * going somewhere reads as a lift, acting in place reads as a press.
+ */
+export function ButtonLink({
+  href,
+  variant = 'primary',
+  size = 'md',
+  className,
+  children,
+  ...rest
+}: Omit<AnchorHTMLAttributes<HTMLAnchorElement>, 'href'> & {
+  href: string;
+  variant?: Variant;
+  size?: Size;
+  children: ReactNode;
+}) {
+  return (
+    <Link
+      {...rest}
+      href={href}
+      className={buttonClass({
+        variant,
+        size,
+        className: cn(
+          'motion-safe:hover:-translate-y-px motion-safe:active:translate-y-0',
+          className,
+        ),
+      })}
+    >
+      {children}
+    </Link>
+  );
+}
+
 export function Button({
   variant = 'primary',
   size = 'md',
@@ -42,17 +101,14 @@ export function Button({
       {...rest}
       // A pending transaction must not be re-submittable, so `loading` disables on its own.
       disabled={disabled || loading}
-      className={cn(
-        // Explicit property list, not `transition-all`: that swept in the primary variant's 24px
-        // accent box-shadow and its hover brightness filter, repainting a gradient-filled element
-        // every frame on the most-pressed control in the app.
-        'inline-flex items-center justify-center gap-2 rounded-xl font-semibold',
-        'press transition-[transform,filter,background-color,border-color,color,box-shadow,opacity] duration-150 ease-[cubic-bezier(.2,.7,.3,1)]',
-        'disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none disabled:hover:brightness-100 disabled:active:scale-100',
-        VARIANTS[variant],
-        SIZES[size],
-        className,
-      )}
+      className={buttonClass({
+        variant,
+        size,
+        className: cn(
+          'disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none disabled:hover:brightness-100 disabled:active:scale-100',
+          className,
+        ),
+      })}
     >
       {loading ? <Loader2 size={15} className="animate-spin" /> : null}
       {children}

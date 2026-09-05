@@ -36,7 +36,7 @@ import { useCookBalance, useRefreshBalances, useTokenBalances } from '@/hooks/us
 import { useTransaction, type TxState } from '@/hooks/useTransaction';
 import { useQuote } from '@/hooks/useQuote';
 import { Button } from '@/components/ui/Button';
-import { Card, EmptyState, Skeleton, cn } from '@/components/ui/primitives';
+import { LABEL_MUTED, MICRO_ACTION, Card, cn, EmptyState, Skeleton } from '@/components/ui/primitives';
 import { RouteDisplay, compareRoutes, describeRouteCheck, type RouteCheck } from './RouteDisplay';
 import { TokenPicker } from './TokenPicker';
 
@@ -589,7 +589,7 @@ export function SwapPanel({
         {/* ---------------- you pay ---------------- */}
         <div className="rounded-xl border border-hairline/10 bg-surface2/60 p-3">
           <div className="mb-2 flex items-center justify-between gap-2">
-            <span className="text-[11px] font-semibold uppercase tracking-wider text-muted">
+            <span className={LABEL_MUTED}>
               You pay
             </span>
             {connected && inputToken ? (
@@ -610,7 +610,7 @@ export function SwapPanel({
                   type="button"
                   onClick={() => setAmount(maxAmountText)}
                   disabled={!maxAmountText || tx.pending}
-                  className="press press-sm press-tint rounded-md border border-hairline/10 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-accent transition-colors hover:bg-accent/10 disabled:cursor-not-allowed disabled:opacity-40"
+                  className={cn(MICRO_ACTION, 'press-tint')}
                 >
                   Max
                 </button>
@@ -673,7 +673,7 @@ export function SwapPanel({
         {/* ---------------- you receive ---------------- */}
         <div className="rounded-xl border border-hairline/10 bg-surface2/60 p-3">
           <div className="mb-2 flex items-center justify-between gap-2">
-            <span className="text-[11px] font-semibold uppercase tracking-wider text-muted">
+            <span className={LABEL_MUTED}>
               You receive
             </span>
             {connected && outputToken ? (
@@ -853,7 +853,7 @@ export function SwapPanel({
               verdict — the words "unsafe", "scam" and "rug" appear nowhere in this app's copy. */}
           {outputNotes.length > 0 && outputToken ? (
             <div className="animate-[fade-in_120ms_ease-out] rounded-xl border border-hairline/10 bg-surface2/60 p-3">
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-muted">
+              <p className={LABEL_MUTED}>
                 About {outputToken.symbol}
               </p>
               <ul className="mt-1.5 space-y-1">
@@ -974,7 +974,7 @@ export function SwapPanel({
           callback and the 90ms beat reads as a left-to-right settle in reading order; at mobile
           this card is genuinely below the fold and the delay is never seen. */}
       <Card variant="solid" reveal revealIndex={1} className="min-w-0 p-3 sm:p-4">
-        <h2 className="text-[11px] font-semibold uppercase tracking-wider text-muted">Route</h2>
+        <h2 className={LABEL_MUTED}>Route</h2>
         {/* A floor, not a fixed height: five different branches live here — empty, quoting,
             no-route, resolved and registry-error — and without it the card jumped by ~90px every
             time one replaced another, dragging the whole right column with it. */}

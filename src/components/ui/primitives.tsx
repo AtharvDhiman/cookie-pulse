@@ -48,17 +48,85 @@ export function Card({
   );
 }
 
+/**
+ * The app's one small-uppercase label.
+ *
+ * There were nine of these across 24 sites: three sizes (10px, 11px, 12px) and four tracking
+ * values (`wide`, `wider`, 0.12em, 0.14em), with /send and /trade labelling the SAME field at
+ * 12px and 11px respectively. None of that was chosen — and a label that changes size between two
+ * halves of the same flow is the kind of thing a designer notices immediately.
+ *
+ * Colour is deliberately NOT in `LABEL`. Tailwind classes do not resolve by string order, so a
+ * caller appending `text-ink2` to a base containing `text-muted` gets whichever rule happens to
+ * sit later in the compiled sheet. Anything wanting a different colour composes `LABEL` instead.
+ */
+export const LABEL = 'text-[10px] font-semibold uppercase tracking-[0.14em]';
+export const LABEL_MUTED = `${LABEL} text-muted`;
+
+/** The MAX / HALF micro-buttons that sit inside the two amount fields. */
+export const MICRO_ACTION =
+  'press press-sm shrink-0 rounded-md border border-hairline/10 bg-surface px-2 py-1 text-[10px] font-bold uppercase tracking-[0.08em] text-accent transition-colors hover:border-accent/50 hover:bg-accent/10 disabled:cursor-not-allowed disabled:opacity-40';
+
 /** Small uppercase label above a section — the reference leans on these heavily. */
 export function Eyebrow({ children, className }: { children: ReactNode; className?: string }) {
+  return <p className={cn(LABEL_MUTED, className)}>{children}</p>;
+}
+
+/**
+ * The one card header.
+ *
+ * Before this existed there were seven of them: three padding families (`px-3 py-2.5 sm:px-4`,
+ * `px-4 py-3`, `px-4 py-3 sm:px-5`) and six title treatments across 13px, 14px and 15px, only one
+ * of which used the display face. Nothing chose those differences — they are the residue of seven
+ * components being written at different times, and they are exactly what reads as "assembled"
+ * rather than "designed" when a page is scanned quickly.
+ *
+ * `meta` is the right-hand slot: a count, a freshness note, a pill, a link. It is deliberately not
+ * typed to any of those, because the only rule is that it is secondary to the title.
+ */
+export function CardHeader({
+  eyebrow,
+  title,
+  titleClassName,
+  subtitle,
+  icon,
+  meta,
+  className,
+}: {
+  eyebrow?: ReactNode;
+  title: ReactNode;
+  /** Escape hatch for a title that is a value rather than a name (the health strip's status). */
+  titleClassName?: string;
+  subtitle?: ReactNode;
+  /** Rendered inside the <h2>, before the title. Must be aria-hidden by the caller. */
+  icon?: ReactNode;
+  meta?: ReactNode;
+  className?: string;
+}) {
   return (
-    <p
+    <div
       className={cn(
-        'text-[10px] font-semibold uppercase tracking-[0.14em] text-muted',
+        'flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b border-hairline/10 px-4 py-3 sm:px-5',
         className,
       )}
     >
-      {children}
-    </p>
+      <div className="min-w-0 flex-1">
+        {eyebrow ? <Eyebrow className="mb-1">{eyebrow}</Eyebrow> : null}
+        <h2
+          className={cn(
+            'flex items-center gap-1.5 font-display text-sm font-bold tracking-tight',
+            titleClassName,
+          )}
+        >
+          {icon}
+          {title}
+        </h2>
+        {subtitle ? (
+          <p className="mt-0.5 text-[11px] leading-relaxed text-muted">{subtitle}</p>
+        ) : null}
+      </div>
+      {meta ? <div className="flex shrink-0 items-center gap-2">{meta}</div> : null}
+    </div>
   );
 }
 
@@ -68,7 +136,7 @@ export function Skeleton({ className }: { className?: string }) {
       className={cn('relative overflow-hidden rounded-md bg-surface2', className)}
       aria-hidden="true"
     >
-      <div className="absolute inset-0 -translate-x-full animate-shimmer bg-gradient-to-r from-transparent via-white/[0.06] to-transparent" />
+      <div className="shimmer-sweep absolute inset-0 -translate-x-full animate-shimmer" />
     </div>
   );
 }

@@ -10,7 +10,7 @@ import { rankableTokens, useRegistry } from '@/hooks/useMarketData';
 import { COOK_MINT } from '@/lib/config';
 import { formatUsd } from '@/lib/format';
 import type { Token } from '@/lib/types';
-import { Card, Change, EmptyState, Skeleton, TokenLogo } from '@/components/ui/primitives';
+import { Card, CardHeader, Change, EmptyState, Skeleton, TokenLogo } from '@/components/ui/primitives';
 
 const ROWS = 5;
 
@@ -97,19 +97,19 @@ function Tile({
       reveal
       revealIndex={revealIndex}
     >
-      <div className="flex items-center justify-between gap-2 border-b border-hairline/10 px-3 py-2.5 sm:px-4">
-        <h2 className="flex items-center gap-1.5 text-[13px] font-bold">
-          <Icon size={14} className={iconClass} aria-hidden="true" />
-          {title}
-        </h2>
-        <Link
-          href="/screener"
-          className="inline-flex shrink-0 items-center gap-0.5 text-[11px] font-semibold text-muted transition-colors hover:text-accent"
-        >
-          Screener
-          <ArrowUpRight size={12} aria-hidden="true" />
-        </Link>
-      </div>
+      <CardHeader
+        icon={<Icon size={14} className={iconClass} aria-hidden="true" />}
+        title={title}
+        meta={
+          <Link
+            href="/screener"
+            className="inline-flex shrink-0 items-center gap-0.5 text-[11px] font-semibold text-muted transition-colors hover:text-accent"
+          >
+            Screener
+            <ArrowUpRight size={12} aria-hidden="true" />
+          </Link>
+        }
+      />
 
       {isLoading ? (
         <RowsSkeleton />

@@ -10,7 +10,7 @@ import { explorerAddress, COOK_SYMBOL } from '@/lib/config';
 import { formatAmount, shortAddr } from '@/lib/format';
 import { useCookBalance } from '@/hooks/useBalances';
 import { Button } from './ui/Button';
-import { CopyButton, cn } from './ui/primitives';
+import { CopyButton, LABEL_MUTED, cn } from './ui/primitives';
 
 export function WalletButton() {
   const { publicKey, disconnect, connecting } = useWallet();
@@ -85,7 +85,7 @@ export function WalletButton() {
           role="menu"
           className="menu-in absolute right-0 z-40 mt-2 w-64 rounded-xl border border-hairline/10 bg-surface p-3 shadow-xl"
         >
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-muted">Connected</p>
+          <p className={LABEL_MUTED}>Connected</p>
           <div
             data-stagger
             style={{ '--i': 0 } as React.CSSProperties}

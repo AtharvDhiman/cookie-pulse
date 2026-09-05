@@ -1,6 +1,5 @@
 'use client';
 
-import Link from 'next/link';
 import type { CSSProperties } from 'react';
 import { ArrowUpRight, Wallet } from 'lucide-react';
 import {
@@ -11,7 +10,8 @@ import {
   RPC_URL,
   WS_URL,
 } from '@/lib/config';
-import { Card, CopyButton, cn } from '@/components/ui/primitives';
+import { ButtonLink } from '@/components/ui/Button';
+import { LABEL_MUTED, Card, cn, CopyButton } from '@/components/ui/primitives';
 import { PointerWeight } from '@/components/motion/PointerWeight';
 import { useReveal } from '@/hooks/useReveal';
 
@@ -109,7 +109,7 @@ function ValueRow({ label, value }: { label: string; value: string }) {
     // a background tab. `title` plus the copy button already solve truncation.
     <div className="flex items-center justify-between gap-2 rounded-xl border border-hairline/10 bg-surface2 px-3 py-2 transition-colors duration-[160ms] focus-within:border-accent/40 hover:border-accent/30">
       <div className="min-w-0">
-        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted">{label}</p>
+        <p className={LABEL_MUTED}>{label}</p>
         <p className="truncate font-mono text-xs text-ink2" title={value}>
           {value}
         </p>
@@ -221,32 +221,15 @@ export default function BridgePage() {
           Funded already?
         </div>
         <div className="flex gap-2">
-          {/* Both buttons had no transition class at all, so `hover:brightness-110` and
-              `hover:border-accent/50` were hard cuts. Identical durations and distances on the two:
-              mismatched hover physics on adjacent buttons is more noticeable than no hover at all.
-              The lift stays at exactly 1px — this row wraps to two lines at 390px. */}
-          <Link
-            href="/trade"
-            className={cn(
-              'accent-gradient rounded-xl px-3 py-2 text-xs font-semibold text-accent-ink shadow-[0_8px_22px_-10px_rgb(var(--accent-glow)/0.7)]',
-              'transition-[filter,transform,color,border-color] duration-150 ease-[cubic-bezier(.2,.7,.3,1)] hover:brightness-110',
-              'motion-safe:hover:-translate-y-px motion-safe:active:translate-y-0 motion-safe:active:scale-[0.98] motion-safe:active:duration-[90ms]',
-              FOCUS_CLEARANCE,
-            )}
-          >
+          {/* Both hand-rolled the button treatment and drifted from it — a lighter glow than the
+              hero's, a fourth padding for the same visual weight. ButtonLink carries the hover
+              physics, so the only thing left to say here is the scroll clearance. */}
+          <ButtonLink href="/trade" size="sm" className={FOCUS_CLEARANCE}>
             Make a swap
-          </Link>
-          <Link
-            href="/portfolio"
-            className={cn(
-              'rounded-xl border border-hairline/10 bg-surface2 px-3 py-2 text-xs font-semibold hover:border-accent/50',
-              'transition-[filter,transform,color,border-color] duration-150 ease-[cubic-bezier(.2,.7,.3,1)]',
-              'motion-safe:hover:-translate-y-px motion-safe:active:translate-y-0 motion-safe:active:scale-[0.98] motion-safe:active:duration-[90ms]',
-              FOCUS_CLEARANCE,
-            )}
-          >
+          </ButtonLink>
+          <ButtonLink href="/portfolio" variant="secondary" size="sm" className={FOCUS_CLEARANCE}>
             View portfolio
-          </Link>
+          </ButtonLink>
         </div>
       </Card>
 

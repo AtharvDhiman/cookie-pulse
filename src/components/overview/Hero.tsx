@@ -8,15 +8,15 @@
 // `animation` that begins during HTML parse (`[data-enter]`), never on an IntersectionObserver —
 // an observer here would leave a blank hero until hydration on a slow connection.
 import type { CSSProperties, ReactNode } from "react";
-import Link from "next/link";
 import { ArrowRight, Zap } from "lucide-react";
+import { ButtonLink } from "@/components/ui/Button";
 import { useMarkets, useRegistry } from "@/hooks/useMarketData";
 import { useChainHealth } from "@/hooks/useChainHealth";
 import { COOK_SYMBOL } from "@/lib/config";
 import { compact, formatUsd } from "@/lib/format";
 import { CountUp } from "@/components/motion/CountUp";
 import { OrbitSystem } from "./OrbitSystem";
-import { Skeleton, StatusDot } from "@/components/ui/primitives";
+import { LABEL, LABEL_MUTED, cn, Skeleton, StatusDot } from '@/components/ui/primitives';
 
 // Module-scoped, as useCountUp requires: an inline arrow is a fresh prop identity on every render,
 // which defeats the memo and restarts the roll every time a poll re-renders this tree.
@@ -37,7 +37,7 @@ function Stat({
 }) {
   return (
     <div className="min-w-0">
-      <dt className="text-[10px] font-semibold uppercase tracking-[0.14em] text-muted">
+      <dt className={LABEL_MUTED}>
         {label}
       </dt>
       <dd className="mt-1 font-display text-lg font-bold tabular-nums tracking-tight sm:text-xl">
@@ -77,7 +77,11 @@ export function Hero() {
             <p
               data-enter
               style={step(0)}
-              className="inline-flex items-center gap-2 rounded-full border border-hairline/10 bg-surface2/50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-ink2 backdrop-blur"
+              className={cn(
+                "inline-flex items-center gap-2 rounded-full border border-hairline/10 bg-surface2/50 px-3 py-1 backdrop-blur",
+                LABEL,
+                "text-ink2",
+              )}
             >
               <StatusDot status={health?.status ?? "unknown"} />
               Cookie Chain mainnet
@@ -100,9 +104,10 @@ export function Hero() {
               style={step(2)}
               className="mt-4 max-w-xl text-[15px] leading-relaxed text-ink2"
             >
-              Every token, pool and swap on Cookie Chain in one terminal. Live
-              chain health, a full screener, your portfolio, and routed swaps
-              you sign in Nightly — nothing custodial.
+              Every token, pool and swap on Cookie Chain in one terminal. Swaps
+              route through Cookiebox and resolve to a definite outcome &mdash;
+              landed, failed, or never seen &mdash; never &ldquo;it may have
+              worked.&rdquo;
             </p>
 
             {/* The row is one enter target, not two, so the buttons arrive as a pair. */}
@@ -111,24 +116,19 @@ export function Hero() {
               style={step(3)}
               className="mt-7 flex flex-wrap items-center gap-2.5"
             >
-              <Link
-                href="/trade"
-                // Was `transition-all`, which put the accent-gradient background-image in the
-                // transition list. The named list is filter/transform/box-shadow and nothing else.
-                className="accent-gradient inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-accent-ink shadow-[0_10px_28px_-10px_rgb(var(--accent-glow)/0.75)] transition-[filter,transform,box-shadow] duration-200 ease-[cubic-bezier(.4,0,.2,1)] hover:brightness-110 hover:shadow-[0_14px_34px_-10px_rgb(var(--accent-glow)/0.85)] active:brightness-95 active:duration-[90ms] motion-safe:hover:-translate-y-px motion-safe:active:translate-y-0"
-              >
-                <Zap size={15} /> Start trading
-              </Link>
-              <Link
-                href="/screener"
-                className="group inline-flex items-center gap-1.5 rounded-xl border border-hairline/10 bg-surface2/60 px-4 py-2.5 text-sm font-semibold backdrop-blur transition-[color,border-color,transform] duration-200 ease-[cubic-bezier(.4,0,.2,1)] hover:border-accent/40 active:duration-[90ms] motion-safe:hover:-translate-y-px motion-safe:active:translate-y-0"
-              >
+              {/* Both were hand-rolled, with a heavier glow and a slower curve than every other
+              primary in the app. They now wear the same treatment as the swap button. */}
+              <ButtonLink href="/trade">
+                <Zap size={15} aria-hidden="true" /> Start trading
+              </ButtonLink>
+              <ButtonLink href="/screener" variant="secondary" className="group">
                 Explore the screener
                 <ArrowRight
                   size={15}
+                  aria-hidden="true"
                   className="transition-transform duration-200 motion-safe:group-hover:translate-x-0.5"
                 />
-              </Link>
+              </ButtonLink>
             </div>
           </div>
 
@@ -147,8 +147,11 @@ export function Hero() {
               value={formatUsd(cookUsd)}
               loading={registryLoading}
             />
+            {/* Was "Tokens tracked", which read as 6,475 comparable assets. Most of the registry
+            is one-of-one NFT editions — the price card 350px below and /screener both say so, and
+            this chip sat above two surfaces that disagreed with it. */}
             <Stat
-              label="Tokens tracked"
+              label="Registry entries"
               value={<CountUp value={count} format={fmtInt} />}
               loading={registryLoading}
             />
@@ -178,7 +181,10 @@ export function Hero() {
 
         {/* The orbit. Real venues, real pools, real validators — the diagram is the dataset, which
             is the only reason a terminal can justify one at all. */}
-        <div data-enter style={step(4)} className="min-w-0">
+        {/* Desktop only. At 390x844 the hero measured 893px — taller than the viewport — and the
+            orbit was cut in half by the fold, pushing the first real data ~200px below it. On a
+            phone the four live stats above are the better use of that screen. */}
+        <div data-enter style={step(4)} className="hidden min-w-0 lg:block">
           <OrbitSystem />
         </div>
       </div>

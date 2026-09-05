@@ -12,7 +12,7 @@ import { getNfts } from '@/lib/api';
 import { explorerToken } from '@/lib/config';
 import type { WalletNft } from '@/lib/types';
 import { useReveal } from '@/hooks/useReveal';
-import { Card, EmptyState, Skeleton, cn } from '@/components/ui/primitives';
+import { Card, CardHeader, EmptyState, Skeleton, cn } from '@/components/ui/primitives';
 
 /** Past this the ladder stops growing — only ~5-10 tiles are ever in view at lg:grid-cols-5. */
 const STAGGER_CAP = 9;
@@ -110,12 +110,14 @@ export function NftGrid({ owner }: { owner: string }) {
     // `solid` because the panel reveals: a transform on a backdrop-filtered surface re-blurs its
     // whole backdrop every frame.
     <Card as="section" variant="solid" reveal revealIndex={1} className="overflow-hidden">
-      <header className="flex items-center justify-between gap-2 border-b border-hairline/10 px-4 py-3">
-        <h2 className="text-sm font-bold tracking-tight">NFTs</h2>
-        {!isLoading && nfts.length > 0 ? (
-          <span className="text-xs text-muted">{nfts.length} held</span>
-        ) : null}
-      </header>
+      <CardHeader
+        title="NFTs"
+        meta={
+          !isLoading && nfts.length > 0 ? (
+            <span className="text-xs text-muted">{nfts.length} held</span>
+          ) : null
+        }
+      />
 
       {isLoading ? (
         // Skeletons never reveal or stagger: 17 shimmer loops are already running on this route at

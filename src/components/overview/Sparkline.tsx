@@ -56,7 +56,11 @@ export function Sparkline({
       viewBox={`0 0 ${VB_W} ${VB_H}`}
       preserveAspectRatio="none"
       style={{ height }}
-      className={className}
+      // `w-full` belongs here, not at the call sites. An SVG with a viewBox and only a height
+      // resolves its width from the aspect ratio, so both of these rendered as 34x34 squares in a
+      // 583px slot — sixty bars at 0.41px each, above the fold. Defaulting it means a new call site
+      // cannot reintroduce the same collapse.
+      className={`w-full ${className ?? ''}`}
       // Bars are drawn in a fixed user space and stretched, so the stroke-free fills stay crisp.
       shapeRendering="crispEdges"
     >

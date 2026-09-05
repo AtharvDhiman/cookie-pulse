@@ -7,7 +7,7 @@ import Link from 'next/link';
 import { COOK_DECIMALS, COOK_MINT, COOK_SYMBOL, TOKEN_2022_PROGRAM_ID, explorerToken } from '@/lib/config';
 import { formatAmount, formatUsd, shortAddr } from '@/lib/format';
 import type { TokenBalance } from '@/lib/types';
-import { Card, EmptyState, Pill, Skeleton, TokenLogo } from '@/components/ui/primitives';
+import { LABEL_MUTED, Card, CardHeader, cn, EmptyState, Pill, Skeleton, TokenLogo } from '@/components/ui/primitives';
 
 interface Row {
   key: string;
@@ -113,19 +113,21 @@ export function HoldingsTable({
     // drifting underneath it. The reveal attributes go on the Card itself rather than on a wrapper,
     // which would place a transform ancestor over the overflow-x-auto scroller below.
     <Card as="section" variant="solid" reveal revealIndex={0} className="overflow-hidden">
-      <header className="flex items-center justify-between gap-2 border-b border-hairline/10 px-4 py-3">
-        <h2 className="text-sm font-bold tracking-tight">Holdings</h2>
-        {/* A failed read must never read as "you own nothing", so say the list is incomplete. */}
-        <span key={slotState} className="animate-fade-in">
-          {slotState === 'error' ? (
-            <Pill tone="warn">Incomplete</Pill>
-          ) : slotState === 'count' ? (
-            <span className="text-xs text-muted">
-              {rows.length} asset{rows.length === 1 ? '' : 's'}
-            </span>
-          ) : null}
-        </span>
-      </header>
+      <CardHeader
+        title="Holdings"
+        meta={
+          /* A failed read must never read as "you own nothing", so say the list is incomplete. */
+          <span key={slotState} className="animate-fade-in">
+            {slotState === 'error' ? (
+              <Pill tone="warn">Incomplete</Pill>
+            ) : slotState === 'count' ? (
+              <span className="text-xs text-muted">
+                {rows.length} asset{rows.length === 1 ? '' : 's'}
+              </span>
+            ) : null}
+          </span>
+        }
+      />
 
       {isLoading ? (
         <LoadingRows />
@@ -161,7 +163,7 @@ export function HoldingsTable({
         <div className="animate-fade-in overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-hairline/10 text-left text-[10px] uppercase tracking-wider text-muted">
+              <tr className={cn('border-b border-hairline/10 text-left', LABEL_MUTED)}>
                 <th scope="col" className="px-4 py-2 font-semibold">
                   Token
                 </th>

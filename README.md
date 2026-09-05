@@ -79,11 +79,14 @@ send again, so it requires two consecutive corroborating rounds and re-reads the
 observing the blockhash die — a transaction that lands between those two calls must not be reported
 as missing.
 
-**The capital map answers "why does this chain look empty".** The DEX pools this app reports as TVL
-are the smallest bucket on the chain: the bCOOK stake pool alone holds ~125M COOK against ~$8K of
-DEX liquidity. Every row names its on-chain source, the stake pool's undelegated reserve is called a
-reserve rather than "staked", a source that fails renders "unavailable" rather than zero, and the
-card states what share of supply it actually accounts for instead of implying the buckets sum to it.
+**The capital map answers "why does this chain look empty".** The DEX pools everyone measures are
+not where the COOK is: the bCOOK stake pool holds ~125M COOK, several times what sits in every DEX
+pool on the chain combined. The card states that multiple as a figure derived from the two rows it
+renders, never as prose — an earlier hard-coded "fifteen times" came from comparing a COOK balance
+against a USD one and had gone stale in four files. Every row names its on-chain source, the stake
+pool's undelegated reserve is called a reserve rather than "staked", a source that fails renders
+"unavailable" rather than zero, and the card states what share of supply it actually accounts for
+instead of implying the buckets sum to it.
 
 ---
 

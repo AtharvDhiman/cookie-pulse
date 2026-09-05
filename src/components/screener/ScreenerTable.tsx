@@ -7,7 +7,7 @@ import { ChevronsUpDown, ChevronUp, ExternalLink } from 'lucide-react';
 import { COOK_MINT, explorerToken } from '@/lib/config';
 import { formatUsd, shortAddr } from '@/lib/format';
 import type { Token } from '@/lib/types';
-import { Change, CopyButton, EmptyState, Skeleton, TokenLogo, cn } from '@/components/ui/primitives';
+import { LABEL, LABEL_MUTED, Change, cn, CopyButton, EmptyState, Skeleton, TokenLogo } from '@/components/ui/primitives';
 
 export type SortKey =
   | 'symbol'
@@ -225,7 +225,8 @@ export function ScreenerTable({ rows, sort, onSort, isLoading, emptyTitle, empty
                     type="button"
                     onClick={() => onSort(col.key)}
                     className={cn(
-                      'inline-flex items-center gap-1 whitespace-nowrap rounded text-[11px] font-semibold uppercase tracking-wider transition-colors hover:text-ink',
+                      'inline-flex items-center gap-1 whitespace-nowrap rounded transition-colors hover:text-ink',
+    LABEL,
                       // The same clearance the tbody controls get: at rest the header row sits
                       // directly beneath the page's sticky filter bar, so `--header-h` alone parks
                       // a tabbed-to sort button *under* the bar — the exact SC 2.4.11 failure.
@@ -254,7 +255,7 @@ export function ScreenerTable({ rows, sort, onSort, isLoading, emptyTitle, empty
             })}
             <th
               scope="col"
-              className="w-[128px] text-left text-[11px] font-semibold uppercase tracking-wider text-muted"
+              className={cn('w-[128px] text-left', LABEL_MUTED)}
             >
               Mint
             </th>

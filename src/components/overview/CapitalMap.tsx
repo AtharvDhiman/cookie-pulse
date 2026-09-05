@@ -3,10 +3,10 @@
 // Where COOK actually sits.
 //
 // This card exists because the honest answer to "why does this analytics page look sparse" is that
-// the DEX pools everyone measures are the *smallest* bucket on the chain — the liquid-staking pool
-// alone holds roughly fifteen times their combined value. That is a real finding, but it is also
-// the card most able to say something the data does not support, so three rules are enforced here
-// rather than left to copy review:
+// the DEX pools everyone measures are far from the biggest pile of COOK on the chain — the
+// liquid-staking pool alone holds several times their combined value. That is a real finding, but
+// it is also the card most able to say something the data does not support, so four rules are
+// enforced here rather than left to copy review:
 //
 //   1. The stake pool's undelegated reserve is named as reserve. Only the validator row, which is
 //      ~1.4M COOK, may be described as stake that is actually working.
@@ -14,9 +14,13 @@
 //      and the footer states that share explicitly. The remainder is drawn but left unlabelled,
 //      because this app does not know what is in it.
 //   3. A bucket whose source failed renders as "unavailable", never as zero. Zero is a claim.
+//   4. No ratio is written in prose. The subtitle's comparison is DERIVED from the same two
+//      buckets the table renders, so a copy line can never survive the data moving out from
+//      under it. The earlier hard-coded "fifteen times" was measured by comparing 125M COOK
+//      against $8K of USD; like for like it was 3.5x, and it had gone stale in four places.
 //
 // Presentational only: it takes a snapshot and renders it. No fetching, no instruction building.
-import { Card, Eyebrow, Skeleton, cn } from '@/components/ui/primitives';
+import { LABEL_MUTED, Card, CardHeader, cn, Skeleton } from '@/components/ui/primitives';
 import { COOK_SYMBOL } from '@/lib/config';
 import { compact, formatUsd } from '@/lib/format';
 import type { CapitalSnapshot, CapitalBucket } from '@/lib/types';
@@ -122,18 +126,37 @@ export function CapitalMap({
     supplyLamports && supplyLamports > 0 ? (accountedLamports / supplyLamports) * 100 : null;
   const anyUnavailable = buckets.some((b) => b.lamports === null);
 
+  // Derived, never written down. Both sides are COOK lamports off the same table, so the comparison
+  // is like for like and moves with the chain instead of with a copy edit.
+  const stakeLamports = buckets.find((b) => b.key === 'stakePool')?.lamports ?? null;
+  const dexLamports = buckets.find((b) => b.key === 'dex')?.lamports ?? null;
+  const stakeOverDex =
+    stakeLamports !== null && dexLamports !== null && dexLamports > 0
+      ? stakeLamports / dexLamports
+      : null;
+
   return (
     <Card as="section" variant="solid" className="overflow-hidden" reveal revealIndex={0}>
-      <div className="border-b border-hairline/10 px-4 py-3 sm:px-5">
-        <Eyebrow>Capital map</Eyebrow>
-        <h2 className="mt-1 font-display text-[15px] font-bold tracking-tight">
-          Where {COOK_SYMBOL} sits
-        </h2>
-        <p className="mt-1 text-[11px] leading-relaxed text-muted">
-          Read live from the chain, not from a price feed. The DEX pools this app reports as TVL are
-          the smallest bucket here.
-        </p>
-      </div>
+      <CardHeader
+        eyebrow="Capital map"
+        title={`Where ${COOK_SYMBOL} sits`}
+        subtitle={
+          <>
+            Read live from the chain, not from a price feed.{' '}
+            {stakeOverDex !== null ? (
+              <>
+                The liquid-staking pool alone holds{' '}
+                <strong className="font-semibold text-ink2">
+                  {stakeOverDex.toFixed(1)}×
+                </strong>{' '}
+                what every DEX pool on the chain holds together.
+              </>
+            ) : (
+              <>Each row below names the account it was read from.</>
+            )}
+          </>
+        }
+      />
 
       <div className="px-4 py-4 sm:px-5">
         {/* Cross-section of supply. The trailing flex-1 track is the unaccounted remainder — drawn,
@@ -171,7 +194,7 @@ export function CapitalMap({
               COOK capital by location, with each figure&apos;s on-chain source
             </caption>
             <thead>
-              <tr className="text-[10px] uppercase tracking-wider text-muted">
+              <tr className={LABEL_MUTED}>
                 <th scope="col" className="pb-1 pr-3 text-left font-semibold">
                   Bucket
                 </th>

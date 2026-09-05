@@ -15,7 +15,7 @@ import {
 import { explorerAddress, slippageLabel } from '@/lib/config';
 import { formatAmount, fromRawAmount, shortAddr } from '@/lib/format';
 import type { Quote, RouteSegment, Token } from '@/lib/types';
-import { Pill, TokenLogo, cn } from '@/components/ui/primitives';
+import { LABEL_MUTED, cn, Pill, TokenLogo } from '@/components/ui/primitives';
 
 /** Venue words that are acronyms and must stay uppercase rather than becoming "Damm". */
 const ACRONYMS = new Set(['damm', 'clmm', 'bamm', 'cpamm', 'samm', 'amm', 'cpmm', 'dlmm', 'lp']);
@@ -340,7 +340,7 @@ export function RouteDisplay({
         {hops.map(({ hopIndex, legs }, hi) => (
           <li key={hopIndex}>
             {hops.length > 1 ? (
-              <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted">
+              <p className={cn('mb-1', LABEL_MUTED)}>
                 Hop {hopIndex + 1} ·{' '}
                 {byMint.get(legs[0].inputMint)?.symbol ?? shortAddr(legs[0].inputMint)} →{' '}
                 {byMint.get(legs[0].outputMint)?.symbol ?? shortAddr(legs[0].outputMint)}

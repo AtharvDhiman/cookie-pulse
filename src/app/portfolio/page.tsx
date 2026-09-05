@@ -23,7 +23,7 @@ import { useRegistry } from '@/hooks/useMarketData';
 import { WALLET_TX_LIMIT } from '@/hooks/useWalletTransactions';
 import { Button } from '@/components/ui/Button';
 import { CountUp } from '@/components/motion/CountUp';
-import { Card, CopyButton, Skeleton, cn } from '@/components/ui/primitives';
+import { LABEL_MUTED, Card, cn, CopyButton, Skeleton } from '@/components/ui/primitives';
 import { HoldingsTable } from '@/components/portfolio/HoldingsTable';
 import { NftGrid } from '@/components/portfolio/NftGrid';
 import { TxHistory } from '@/components/portfolio/TxHistory';
@@ -60,7 +60,7 @@ function Stat({
 }) {
   return (
     <div data-enter style={{ '--i': index } as CSSProperties} className="px-4 py-3">
-      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted">{label}</p>
+      <p className={LABEL_MUTED}>{label}</p>
       {loading ? (
         // Sized to the box it is standing in for: the resolved value is text-xl on mt-1, a 28px
         // line. The old h-6/mt-2 skeleton shifted the card by ~8px the moment data landed.

@@ -39,7 +39,7 @@ import { useRegistry } from '@/hooks/useMarketData';
 import { useMemoProgram } from '@/hooks/useMemoProgram';
 import { useTransaction, type BuiltTx, type TxState } from '@/hooks/useTransaction';
 import { Button } from '@/components/ui/Button';
-import { Card, EmptyState, Skeleton, TokenLogo, cn } from '@/components/ui/primitives';
+import { LABEL_MUTED, MICRO_ACTION, Card, cn, EmptyState, Skeleton, TokenLogo } from '@/components/ui/primitives';
 
 /** Reserve, in lamports. Kept unspent so the wallet can still pay for a follow-up signature. */
 const FEE_RESERVE_RAW = BigInt(Math.round(FEE_RESERVE_COOK * LAMPORTS_PER_COOK));
@@ -530,7 +530,7 @@ export function SendForm() {
           here would show an empty card until hydration. */}
       <Card className="enter-fade space-y-4 p-4 sm:p-5">
         <div data-enter style={{ '--i': 0 } as React.CSSProperties}>
-          <p className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-muted">Asset</p>
+          <p className={cn('mb-1.5', LABEL_MUTED)}>Asset</p>
           {balancesLoading ? (
             <Skeleton className="h-[54px] w-full" />
           ) : (
@@ -546,7 +546,7 @@ export function SendForm() {
         <div data-enter style={{ '--i': 1 } as React.CSSProperties}>
           <label
             htmlFor="send-recipient"
-            className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-muted"
+            className={cn('mb-1.5 block', LABEL_MUTED)}
           >
             Recipient
           </label>
@@ -580,7 +580,7 @@ export function SendForm() {
           <div className="mb-1.5 flex items-baseline justify-between gap-2">
             <label
               htmlFor="send-amount"
-              className="text-xs font-semibold uppercase tracking-wider text-muted"
+              className={LABEL_MUTED}
             >
               Amount
             </label>
@@ -622,7 +622,7 @@ export function SendForm() {
               type="button"
               onClick={onMax}
               disabled={tx.pending || maxRaw === 0n}
-              className="press press-sm shrink-0 rounded-md border border-hairline/10 bg-surface px-2 py-1 text-[11px] font-bold uppercase tracking-wide text-accent transition-colors hover:border-accent/50 disabled:cursor-not-allowed disabled:opacity-40"
+              className={MICRO_ACTION}
             >
               Max
             </button>
@@ -653,7 +653,7 @@ export function SendForm() {
             <div className="mb-1.5 flex items-baseline justify-between gap-2">
               <label
                 htmlFor="send-memo"
-                className="text-xs font-semibold uppercase tracking-wider text-muted"
+                className={LABEL_MUTED}
               >
                 Memo <span className="font-normal normal-case tracking-normal">(optional)</span>
               </label>

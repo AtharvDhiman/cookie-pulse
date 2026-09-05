@@ -9,7 +9,7 @@ import { useActivity, type ActivityRow } from '@/hooks/useActivity';
 import { useFreshOnMount } from '@/hooks/useDelta';
 import { explorerTx } from '@/lib/config';
 import { shortAddr, timeAgo } from '@/lib/format';
-import { Card, EmptyState, Pill, Skeleton, cn } from '@/components/ui/primitives';
+import { Card, CardHeader, EmptyState, Pill, Skeleton, cn } from '@/components/ui/primitives';
 
 /** Only the first six rows are above the fold when this card reveals; 7+ would stagger unseen. */
 const STAGGERED_ROWS = 6;
@@ -136,22 +136,20 @@ export function ActivityPanel() {
   return (
     // Solid because it reveals; the reveal lands on the CARD and nothing inside it moves as a block.
     <Card as="section" variant="solid" className="overflow-hidden" reveal revealIndex={0}>
-      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b border-hairline/10 px-3 py-2.5 sm:px-4">
-        <div className="min-w-0">
-          <h2 className="text-[13px] font-bold">Activity</h2>
-          <p className="truncate text-[11px] text-muted">
-            Latest transactions across the Cookiebox, Cookieswap and MomoSwap programs
-          </p>
-        </div>
-        <span
-          className={cn(
-            'whitespace-nowrap text-[11px]',
-            stale ? 'font-medium text-warn' : 'text-muted',
-          )}
-        >
-          {stale ? 'Reconnecting…' : isFetching ? 'Refreshing…' : 'Refreshes every 8s'}
-        </span>
-      </div>
+      <CardHeader
+        title="Activity"
+        subtitle="Latest transactions across the Cookiebox, Cookieswap and MomoSwap programs"
+        meta={
+          <span
+            className={cn(
+              'whitespace-nowrap text-[11px]',
+              stale ? 'font-medium text-warn' : 'text-muted',
+            )}
+          >
+            {stale ? 'Reconnecting…' : isFetching ? 'Refreshing…' : 'Refreshes every 8s'}
+          </span>
+        }
+      />
 
       {isLoading ? (
         <RowsSkeleton />

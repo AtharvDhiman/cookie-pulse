@@ -9,6 +9,7 @@ import { useChanged } from '@/hooks/useDelta';
 import { useTheme } from '@/providers/ThemeProvider';
 import { ScrollProgress } from '@/components/motion/ScrollProgress';
 import { WalletButton } from './WalletButton';
+import { Logo } from './ui/Logo';
 import { StatusDot, cn } from './ui/primitives';
 
 const NAV = [
@@ -114,8 +115,11 @@ export function Header() {
       <div className="mx-auto w-full max-w-[1280px] px-3 sm:px-6">
         <div className="flex h-16 items-center justify-between gap-2">
           <Link href="/" className="group flex shrink-0 items-center gap-2.5">
-            <span className="accent-gradient flex h-8 w-8 items-center justify-center rounded-xl text-base shadow-[0_6px_18px_-8px_rgb(var(--accent-glow)/0.8)] transition-transform duration-[220ms] ease-[cubic-bezier(.2,.7,.3,1)] group-hover:rotate-[-8deg] group-hover:scale-[1.06] group-active:scale-[.98]">
-              🍪
+            {/* The tile no longer rotates. A logo that spins on hover is a decoration a designer
+                would have cut — it says nothing about the product and it is the first thing on the
+                page. What is left is a 2% scale, which reads as "this is a link". */}
+            <span className="accent-gradient flex h-8 w-8 items-center justify-center rounded-xl text-accent-ink shadow-[0_6px_18px_-8px_rgb(var(--accent-glow)/0.8)] transition-transform duration-[220ms] ease-[cubic-bezier(.2,.7,.3,1)] group-hover:scale-[1.02] group-active:scale-[.98]">
+              <Logo size={19} />
             </span>
             {/* The wordmark gets nothing: a travelling sheen on background-clip:text repaints every
                 frame, inside a sticky backdrop-filtered bar, permanently, in peripheral vision. */}

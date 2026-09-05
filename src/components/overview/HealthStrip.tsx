@@ -6,7 +6,7 @@
 import { AlertTriangle, RotateCw } from 'lucide-react';
 import { useChainHealth } from '@/hooks/useChainHealth';
 import { Button } from '@/components/ui/Button';
-import { Card, Pill, Skeleton, StatusDot, cn } from '@/components/ui/primitives';
+import { LABEL_MUTED, Card, CardHeader, cn, Pill, Skeleton, StatusDot } from '@/components/ui/primitives';
 import { Sparkline } from './Sparkline';
 import type { ChainHealth } from '@/lib/types';
 
@@ -28,7 +28,7 @@ function Metric({
 }) {
   return (
     <div className={CELL}>
-      <dt className="truncate text-[10px] font-semibold uppercase tracking-wider text-muted">
+      <dt className={cn('truncate', LABEL_MUTED)}>
         {label}
       </dt>
       <dd
@@ -154,7 +154,7 @@ function Metrics({ data }: { data: ChainHealth }) {
       {hasWindow ? (
         <div className="grid gap-px border-t border-hairline/10 bg-rule sm:grid-cols-2">
           <div className={CELL}>
-            <p className="truncate text-[10px] font-semibold uppercase tracking-wider text-muted">
+            <p className={cn('truncate', LABEL_MUTED)}>
               Non-vote transactions · last {perf.minutes}m
             </p>
             <div className="mt-1.5">
@@ -175,7 +175,7 @@ function Metrics({ data }: { data: ChainHealth }) {
           </div>
 
           <div className={CELL}>
-            <p className="truncate text-[10px] font-semibold uppercase tracking-wider text-muted">
+            <p className={cn('truncate', LABEL_MUTED)}>
               Block rate · last {perf.minutes}m
             </p>
             <div className="mt-1.5">
@@ -239,22 +239,22 @@ export function HealthStrip() {
     <Card as="section" variant="solid" className="overflow-hidden" reveal revealIndex={0}>
       <h2 className="sr-only">Cookie Chain health</h2>
 
-      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 border-b border-hairline/10 px-3 py-2.5 sm:px-4">
-        <div className="flex min-w-0 items-center gap-2">
-          <span className="flex items-center gap-1.5 text-sm font-bold capitalize">
-            <StatusDot status={status} />
-            {statusLabel}
-          </span>
-          <span className="truncate text-xs text-muted">Cookie Chain mainnet</span>
-        </div>
-
-        <div className="flex min-w-0 items-center gap-2">
-          {data?.note ? <Pill tone="warn">{data.note}</Pill> : null}
-          <span className="whitespace-nowrap text-[11px] text-muted">
-            {isFetching ? 'Refreshing…' : 'Refreshes every 15s'}
-          </span>
-        </div>
-      </div>
+      {/* The status IS the title here — it was previously inline with the chain name at equal
+          weight, which made the one word a judge scans for compete with a constant. */}
+      <CardHeader
+        icon={<StatusDot status={status} />}
+        title={statusLabel}
+        titleClassName="capitalize"
+        subtitle="Cookie Chain mainnet"
+        meta={
+          <>
+            {data?.note ? <Pill tone="warn">{data.note}</Pill> : null}
+            <span className="whitespace-nowrap text-[11px] text-muted">
+              {isFetching ? 'Refreshing…' : 'Refreshes every 15s'}
+            </span>
+          </>
+        }
+      />
 
       {/* Three sibling slots, each independently conditional. This is the shape that matters: it
           renders <Metrics> from ONE JSX position, so a failed 15s poll no longer moves it from the

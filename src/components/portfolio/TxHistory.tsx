@@ -8,7 +8,7 @@ import { ArrowUpRight } from 'lucide-react';
 import { COOK_SYMBOL, explorerTx } from '@/lib/config';
 import { formatAmount, shortAddr, timeAgo } from '@/lib/format';
 import { useWalletTransactions, WALLET_TX_LIMIT } from '@/hooks/useWalletTransactions';
-import { Card, EmptyState, Pill, Skeleton } from '@/components/ui/primitives';
+import { Card, CardHeader, EmptyState, Pill, Skeleton } from '@/components/ui/primitives';
 
 export function TxHistory() {
   const { data, isLoading, isError } = useWalletTransactions();
@@ -25,10 +25,10 @@ export function TxHistory() {
     // the compositor re-blur its whole backdrop every frame. No revealIndex — this block owns a
     // sibling stagger of its own, and a block delay on top of it would read as lag.
     <Card as="section" variant="solid" reveal className="overflow-hidden">
-      <header className="flex items-center justify-between gap-2 border-b border-hairline/10 px-4 py-3">
-        <h2 className="text-sm font-bold tracking-tight">Recent activity</h2>
-        <span className="text-xs text-muted">Last {WALLET_TX_LIMIT}</span>
-      </header>
+      <CardHeader
+        title="Recent activity"
+        meta={<span className="text-xs text-muted">Last {WALLET_TX_LIMIT}</span>}
+      />
 
       {isLoading ? (
         <div>

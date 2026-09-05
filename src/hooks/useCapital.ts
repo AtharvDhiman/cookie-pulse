@@ -84,7 +84,11 @@ async function fetchCapitalAccounts(signal?: AbortSignal) {
   };
 }
 
-export function useCapital(): { snapshot: CapitalSnapshot | null; isLoading: boolean } {
+export function useCapital(): {
+  snapshot: CapitalSnapshot | null;
+  isLoading: boolean;
+  isError: boolean;
+} {
   const accounts = useQuery({
     queryKey: ['capital-accounts'],
     queryFn: ({ signal }) => fetchCapitalAccounts(signal),
@@ -153,5 +157,7 @@ export function useCapital(): { snapshot: CapitalSnapshot | null; isLoading: boo
     return { supplyLamports, buckets, cookUsd, dexTvlUsd };
   }, [accounts.data, health, markets, cookUsd]);
 
-  return { snapshot, isLoading: accounts.isLoading };
+  // isError is surfaced so the card can say the read failed. Without it a dead RPC batch left the
+  // skeleton shimmering indefinitely, which reads as "still loading" rather than "did not answer".
+  return { snapshot, isLoading: accounts.isLoading, isError: accounts.isError };
 }

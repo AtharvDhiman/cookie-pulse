@@ -197,7 +197,9 @@ export function ScreenerTable({ rows, sort, onSort, isLoading, emptyTitle, empty
     // content-determined, so it has zero vertical scroll range, and a sticky thead inside it
     // resolves against a scrollport that never scrolls. The symptom is silence — no error, it
     // simply does not stick. The page's sticky filter bar is the substitute.
-    <div className="overflow-x-auto">
+    // The fade on the right edge is the only thing telling a phone user there are seven more
+    // columns off-screen. Same static mask the nav already uses: no JS, and it repaints nothing.
+    <div className="overflow-x-auto [mask-image:linear-gradient(90deg,#000_0,#000_calc(100%-28px),transparent)] sm:[mask-image:none]">
       <table className="w-full min-w-[1020px] border-separate border-spacing-0 text-sm">
         <caption className="sr-only">
           Cookie Chain tokens with price, 24 hour change, volume, liquidity, market cap and holders.

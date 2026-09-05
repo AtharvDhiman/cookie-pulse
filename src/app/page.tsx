@@ -193,8 +193,8 @@ function TvlCard() {
 }
 
 function CapitalMapSection() {
-  const { snapshot, isLoading } = useCapital();
-  return <CapitalMap snapshot={snapshot} isLoading={isLoading} />;
+  const { snapshot, isLoading, isError } = useCapital();
+  return <CapitalMap snapshot={snapshot} isLoading={isLoading} isError={isError} />;
 }
 
 export default function OverviewPage() {

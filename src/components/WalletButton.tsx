@@ -67,7 +67,13 @@ export function WalletButton() {
             header cluster on every 20s balance poll. No count-up — rolling a financial figure
             through wrong intermediate values on a terminal reads as a slot machine. */}
         <span className="hidden min-w-[5.5rem] text-right tabular-nums text-ink2 sm:inline">
-          {balanceLoading ? '…' : `${formatAmount(balance ?? 0, 4)} ${COOK_SYMBOL}`}
+          {/* `?? 0` printed "0.0000 COOK" when the read failed — a balance of zero is a claim,
+              and /portfolio already shows an em dash for exactly this case. */}
+          {balanceLoading
+            ? '…'
+            : balance == null
+              ? `— ${COOK_SYMBOL}`
+              : `${formatAmount(balance, 4)} ${COOK_SYMBOL}`}
         </span>
         <span className="hidden h-4 w-px bg-rule sm:inline-block" />
         <span className="font-mono">{shortAddr(address)}</span>
@@ -104,7 +110,11 @@ export function WalletButton() {
           >
             <span className="text-xs text-muted">Balance</span>
             <span className="tabular-nums text-sm font-semibold">
-              {balanceLoading ? '…' : `${formatAmount(balance ?? 0, 6)} ${COOK_SYMBOL}`}
+              {balanceLoading
+                ? '…'
+                : balance == null
+                  ? `— ${COOK_SYMBOL}`
+                  : `${formatAmount(balance, 6)} ${COOK_SYMBOL}`}
             </span>
           </div>
 

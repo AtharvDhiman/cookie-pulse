@@ -90,6 +90,20 @@ function custom1MeansFunds(logs: string[] | null): boolean {
   return program === null || FUNDS_ERROR_1_PROGRAMS.has(program);
 }
 
+/**
+ * A network error's `message` is written for a developer console, not for a card on a dashboard.
+ * "Failed to fetch" (Chrome), "NetworkError when attempting to fetch resource." (Firefox) and
+ * "Load failed" (Safari) all mean the same unremarkable thing, and all three read as a bug when
+ * printed verbatim under a heading. Anything more specific than those is worth showing as it is.
+ */
+export function readErrorDetail(e: unknown, fallback: string): string {
+  const m = e instanceof Error ? e.message : '';
+  if (!m) return fallback;
+  return /failed to fetch|networkerror|load failed/i.test(m)
+    ? 'The network request did not complete.'
+    : m;
+}
+
 export function toFriendlyError(e: unknown): FriendlyError {
   // Already phrased by whoever threw it — matching it against the patterns below could only make
   // the message worse.

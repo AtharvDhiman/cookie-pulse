@@ -145,7 +145,11 @@ export function OrbitSystem() {
           <radialGradient id="orbit-core" cx="50%" cy="50%">
             <stop offset="0%" stopColor="rgb(var(--accent-2))" />
             <stop offset="55%" stopColor="rgb(var(--accent))" />
-            <stop offset="100%" stopColor="rgb(var(--accent))" stopOpacity="0.35" />
+            {/* Was 0.35. The disc faded to a near-transparent rim over its outer 45%, and the
+                readout sits ON that rim, so the ends of the price measured 1.51:1 in dark and the
+                whole string peaked at 3.44:1 in light. The core is a label background; it has to
+                be opaque. */}
+            <stop offset="100%" stopColor="rgb(var(--accent))" stopOpacity="1" />
           </radialGradient>
           <radialGradient id="orbit-bloom" cx="50%" cy="50%">
             <stop offset="0%" stopColor="rgb(var(--accent-glow))" stopOpacity="0.42" />
@@ -161,9 +165,12 @@ export function OrbitSystem() {
         <Ring ring={RINGS[1]} nodes={poolNodes} ariaLabel="Liquidity pools" />
         <Ring ring={RINGS[2]} nodes={validatorNodes} ariaLabel="Validators" />
 
-        {/* The core is COOK. Static: the one thing on screen that must never appear to wobble. */}
-        <circle cx={CX} cy={CY} r={26} fill="url(#orbit-core)" className="orbit__core" />
-        <circle cx={CX} cy={CY} r={26} className="orbit__core-ring" />
+        {/* The core is COOK. Static: the one thing on screen that must never appear to wobble.
+            r=34, not 26: at 26 the disc rendered 62.4px across while "$0.0001118" at 11px/700
+            renders 67.05px, so the price was wider than the thing it was written on. 34 gives a
+            40.8px radius against a 33.5px half-string. */}
+        <circle cx={CX} cy={CY} r={34} fill="url(#orbit-core)" className="orbit__core" />
+        <circle cx={CX} cy={CY} r={34} className="orbit__core-ring" />
       </svg>
 
       <div className="orbit__readout">

@@ -29,26 +29,31 @@ function ChainStatus() {
   const statusChanged = useChanged(status);
 
   const label = isError ? 'RPC down' : isLoading || !data ? 'Checking' : data.status;
+  // Only the raw status VALUE arrives lowercase from the feed. 'RPC down' and 'Checking' are
+  // already cased correctly, and title-casing them produced "RPC Down".
+  const casesLabel = !isError && !isLoading && !!data;
 
   return (
     <span
       title={data?.note ?? label}
       className={cn(
-        'hidden items-center gap-2 rounded-full border px-3 py-1.5 text-[11px] font-medium capitalize text-ink2 backdrop-blur transition-colors duration-[900ms] md:inline-flex',
+        // No `capitalize` here: it applies per-WORD, so "RPC down" rendered as "RPC Down". Only
+        // the status value needs casing, and it is wrapped for that at the call site below.
+        'hidden items-center gap-2 rounded-full border px-3 py-1.5 text-[11px] font-medium text-ink2 backdrop-blur transition-colors duration-[900ms] md:inline-flex',
         statusChanged
           ? 'border-warn/40 bg-warn/15 duration-0'
           : 'border-hairline/10 bg-surface2/60',
       )}
     >
       <StatusDot status={status} pinged={statusChanged} />
-      {label}
+      <span className={casesLabel ? 'capitalize' : undefined}>{label}</span>
       {/* Fixed width and tabular figures: '12ms' → '104ms' used to widen this pill and shove the
           theme toggle and wallet button left every 15 seconds. The text itself never transitions —
           a fade on a number that is telling you nothing changed reads as a rendering bug. */}
       {data?.latencyMs ? (
-        // `normal-case` because the pill capitalizes its status word, which was also turning
-        // "205 ms" into "205 Ms".
-        <span className="inline-block min-w-[3.25rem] text-right normal-case tabular-nums text-muted">
+        // No `normal-case` needed any more: the pill no longer capitalizes wholesale, so this
+        // stopped rendering as "205 Ms" on its own.
+        <span className="inline-block min-w-[3.25rem] text-right tabular-nums text-muted">
           {data.latencyMs} ms
         </span>
       ) : null}

@@ -106,13 +106,23 @@
 
   --ink: 18 21 28;
   --ink-2: 60 67 80;
-  --muted: 106 114 129;
+  /* 4.44:1 before — it failed on --ground AND on --surface-2 while carrying the nav, the footer
+     and every stat label in the app. 4.71:1 / 4.75:1 / 5.13:1 now, same hue. */
+  --muted: 102 110 125;
   --rule: 219 223 231;
 
-  --accent: 214 74 16;
-  --accent-2: 236 116 46;
+  /* Darker than they look like they should be, and measured rather than eyeballed. The previous
+     pair (214 74 16 / 236 116 46) put the .accent-text wordmark, the hero's second line and the
+     /bridge h1 at 2.71:1 on this ground, and took every text-accent on a tinted surface down to
+     3.49:1. Gradient TEXT cannot be fixed by changing the ink, so the accent itself has to move.
+     Measured as text on --ground: 5.51:1 and 4.73:1. White ink on the same two stops measures
+     6.01:1 and 5.16:1, which is why --accent-ink stays white here rather than flipping to a dark
+     ink: the CTA passes on the darkened gradient as it is. The gradient is flatter in light than
+     in dark; that is the cost of a legible wordmark, and it is the right trade. */
+  --accent: 176 60 10;
+  --accent-2: 190 70 10;
   --accent-ink: 255 255 255;
-  --accent-glow: 214 74 16;
+  --accent-glow: 176 60 10;
 
   --up: 22 122 92;
   --down: 189 48 40;
@@ -1044,7 +1054,9 @@ html.js .tp-panel {
   font-size: 11px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
-  color: rgb(var(--accent-ink) / 0.85);
+  /* Full alpha. The 0.85 cost ~0.5 of contrast on the one string a judge reads first and bought
+     nothing visible at 11px. */
+  color: rgb(var(--accent-ink));
 }
 
 @media (prefers-reduced-motion: no-preference) {

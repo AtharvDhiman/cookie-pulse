@@ -20,7 +20,14 @@
 //      against $8K of USD; like for like it was 3.5x, and it had gone stale in four places.
 //
 // Presentational only: it takes a snapshot and renders it. No fetching, no instruction building.
-import { LABEL_MUTED, Card, CardHeader, cn, Skeleton } from '@/components/ui/primitives';
+import {
+  LABEL_MUTED,
+  Card,
+  CardHeader,
+  EmptyState,
+  cn,
+  Skeleton,
+} from '@/components/ui/primitives';
 import { COOK_SYMBOL } from '@/lib/config';
 import { compact, formatUsd } from '@/lib/format';
 import type { CapitalSnapshot, CapitalBucket } from '@/lib/types';
@@ -105,10 +112,26 @@ function Loading() {
 export function CapitalMap({
   snapshot,
   isLoading,
+  isError = false,
 }: {
   snapshot: CapitalSnapshot | null;
   isLoading: boolean;
+  isError?: boolean;
 }) {
+  // Ordered before the loading branch on purpose. A failed batch is not loading, and the skeleton
+  // it used to fall through to shimmered forever — the one state that looks identical to progress.
+  if (isError && !snapshot) {
+    return (
+      <Card as="section" variant="solid" className="overflow-hidden" reveal revealIndex={0}>
+        <CardHeader eyebrow="Capital map" title={`Where ${COOK_SYMBOL} sits`} />
+        <EmptyState
+          title="Capital map unavailable"
+          hint="The Cookie Chain RPC did not answer the account batch this card is built from. It retries on the next poll."
+        />
+      </Card>
+    );
+  }
+
   if (isLoading || !snapshot) {
     return (
       <Card as="section" variant="solid" className="overflow-hidden" reveal revealIndex={0}>

@@ -7,6 +7,7 @@ import { AlertTriangle, RotateCw } from 'lucide-react';
 import { useChainHealth } from '@/hooks/useChainHealth';
 import { Button } from '@/components/ui/Button';
 import { LABEL_MUTED, Card, CardHeader, cn, Pill, Skeleton, StatusDot } from '@/components/ui/primitives';
+import { readErrorDetail } from '@/lib/errors';
 import { Sparkline } from './Sparkline';
 import type { ChainHealth } from '@/lib/types';
 
@@ -196,23 +197,44 @@ function Metrics({ data }: { data: ChainHealth }) {
   );
 }
 
+// Mirrors BOTH blocks the loaded strip renders, not just the metrics grid. Reserving only the
+// six cells left the skeleton at 68px against a resolved 177px, so the landing screen jumped 109px
+// the moment health arrived — above the fold, under the hero, on first paint.
 function MetricsSkeleton() {
   return (
-    <dl className="grid grid-cols-2 gap-px bg-rule sm:grid-cols-3 lg:grid-cols-6">
-      {Array.from({ length: 6 }, (_, i) => (
-        <div key={i} className={CELL}>
-          <dt>
-            <Skeleton className="h-2.5 w-16" />
-          </dt>
-          <dd className="mt-2">
-            <Skeleton className="h-4 w-20" />
-          </dd>
-          <div className="mt-1.5">
-            <Skeleton className="h-2 w-12" />
+    <>
+      <dl className="grid grid-cols-2 gap-px bg-rule sm:grid-cols-3 lg:grid-cols-6">
+        {Array.from({ length: 6 }, (_, i) => (
+          <div key={i} className={CELL}>
+            <dt>
+              <Skeleton className="h-2.5 w-16" />
+            </dt>
+            <dd className="mt-2">
+              <Skeleton className="h-4 w-20" />
+            </dd>
+            <div className="mt-1.5">
+              <Skeleton className="h-2 w-12" />
+            </div>
           </div>
-        </div>
-      ))}
-    </dl>
+        ))}
+      </dl>
+
+      {/* The two sparkline cells. Heights match the real markup exactly: label 2.5, the 34px
+          chart, then the caption. */}
+      <div className="grid gap-px border-t border-hairline/10 bg-rule sm:grid-cols-2">
+        {[0, 1].map((i) => (
+          <div key={i} className={CELL}>
+            <Skeleton className="h-2.5 w-40" />
+            <div className="mt-1.5">
+              <Skeleton className="h-[34px] w-full" />
+            </div>
+            <div className="mt-1">
+              <Skeleton className="h-2.5 w-52" />
+            </div>
+          </div>
+        ))}
+      </div>
+    </>
   );
 }
 
@@ -244,7 +266,9 @@ export function HealthStrip() {
       <CardHeader
         icon={<StatusDot status={status} />}
         title={statusLabel}
-        titleClassName="capitalize"
+        // Only when the title is the feed's own lowercase status word. When it is a sentence
+        // ("RPC not responding — showing last known"), capitalize title-cased every word in it.
+        titleClassName={data && !isError ? 'capitalize' : undefined}
         subtitle="Cookie Chain mainnet"
         meta={
           <>
@@ -268,7 +292,7 @@ export function HealthStrip() {
           <div className="min-w-0 flex-1">
             <p className="text-sm font-semibold">Cookie Chain RPC is not responding.</p>
             <p className="mt-0.5 break-words text-xs text-muted">
-              {error instanceof Error ? error.message : 'The batched health request failed.'}
+              {readErrorDetail(error, 'The batched health request failed.')}
             </p>
           </div>
           <Button variant="secondary" onClick={() => void refetch()} loading={isFetching}>

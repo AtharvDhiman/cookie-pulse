@@ -48,7 +48,12 @@ function Stat({
 }
 
 export function Hero() {
-  const { cookUsd, count, isLoading: registryLoading } = useRegistry();
+  const {
+    cookUsd,
+    count,
+    isLoading: registryLoading,
+    isError: registryError,
+  } = useRegistry();
   const { data: markets, isLoading: marketsLoading } = useMarkets();
   const { data: health } = useChainHealth();
 
@@ -152,7 +157,10 @@ export function Hero() {
             this chip sat above two surfaces that disagreed with it. */}
             <Stat
               label="Registry entries"
-              value={<CountUp value={count} format={fmtInt} />}
+              // `count` falls back to 0 in the hook, which is load-bearing there but reads as a
+              // measurement here: a failed registry read printed "0" next to three siblings that
+              // correctly printed an em dash. null is what CountUp renders as unknown.
+              value={<CountUp value={registryError ? null : count} format={fmtInt} />}
               loading={registryLoading}
             />
             {/* Compact TVL only — `compact()` holds its digit count steady ($8.10K), unlike formatUsd. */}

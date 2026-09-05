@@ -110,7 +110,9 @@ function ValueRow({ label, value }: { label: string; value: string }) {
     <div className="flex items-center justify-between gap-2 rounded-xl border border-hairline/10 bg-surface2 px-3 py-2 transition-colors duration-[160ms] focus-within:border-accent/40 hover:border-accent/30">
       <div className="min-w-0">
         <p className={LABEL_MUTED}>{label}</p>
-        <p className="truncate font-mono text-xs text-ink2" title={value}>
+        {/* Wraps below md instead of truncating. A 44-character mint shown as 9 characters with
+            a hover-only `title` fallback is unusable on a phone, which has no hover. */}
+        <p className="break-all font-mono text-xs text-ink2 md:truncate" title={value}>
           {value}
         </p>
       </div>

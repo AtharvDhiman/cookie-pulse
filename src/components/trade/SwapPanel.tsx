@@ -26,7 +26,7 @@ import {
   slippageLabel,
 } from '@/lib/config';
 import { formatAmount, formatUsd, fromRawAmount, shortAddr, toRawAmount } from '@/lib/format';
-import { PresentableError, type FriendlyError } from '@/lib/errors';
+import { PresentableError, readErrorDetail, type FriendlyError } from '@/lib/errors';
 import { rankableTokens, useMarkets, useRegistry, useTokenDirectory } from '@/hooks/useMarketData';
 import { useMintAudit } from '@/hooks/useMintAudit';
 import { assessImpostor } from '@/lib/impostor';
@@ -837,7 +837,9 @@ export function SwapPanel({
               <AlertTriangle size={15} className="mt-0.5 shrink-0 text-warn" aria-hidden="true" />
               <div className="min-w-0 flex-1">
                 <p className="text-xs font-semibold text-ink">Could not reach the router.</p>
-                <p className="mt-0.5 break-words text-[11px] text-ink2">{quoteError.message}</p>
+                <p className="mt-0.5 break-words text-[11px] text-ink2">
+                  {readErrorDetail(quoteError, 'The router did not answer.')}
+                </p>
               </div>
               <button
                 type="button"
@@ -1000,6 +1002,15 @@ export function SwapPanel({
               <EmptyState
                 title="No route for this pair"
                 hint="The aggregator found no pool path between these two tokens. Most pairs route through COOK."
+              />
+            </div>
+          ) : quoteError ? (
+            /* Without this branch a dead router fell through to "No quote yet — pick a pair and
+               enter an amount", which is advice the user has already followed. */
+            <div className="animate-fade-in">
+              <EmptyState
+                title="Route unavailable"
+                hint="The router did not answer, so there is no path to show. The panel retries every 10 seconds."
               />
             </div>
           ) : (

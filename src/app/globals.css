@@ -332,11 +332,29 @@ body {
     transform: none;
   }
 
+  /* The same escape the reveal container already has, extended to staggered children. Movers rows
+     and activity rows are opacity:0 until their card shows, and each one wraps a link — without
+     this, tabbing ahead of the scroll lands focus on an element nobody can see. */
+  html.js [data-reveal] [data-stagger]:focus-within {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+
   /* Above the fold: a self-completing animation that begins during HTML parse and finishes whether
      or not React hydrates. An observer here would ship a blank hero on slow JS. */
   html.js [data-enter] {
     animation: enter-rise var(--dur-enter) var(--ease-lead) both;
     animation-delay: calc(min(var(--i, 0), 4) * var(--beat-enter));
+  }
+
+  /* `both` fill holds these at opacity 0 through their delay, and the ladder carries CTAs, links
+     and a Connect button. A keyboard user arriving inside that window must not be focusing a blank
+     box, so focus cancels the animation outright rather than waiting it out. */
+  html.js [data-enter]:focus-within {
+    animation: none;
+    opacity: 1;
+    transform: none;
   }
 
   html.js .route-enter {
@@ -623,5 +641,304 @@ html[data-scrollable] .scroll-progress {
 
   .scroll-progress {
     display: none;
+  }
+}
+
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════
+   SURFACE MOTION (S2-S6). Authored per surface, merged here because globals.css is shared.
+   Every choreography rule below sits inside a prefers-reduced-motion: no-preference gate; the
+   handful of top-level rules are STATE (a stuck filter bar's shadow, a CTA's resting glow) whose
+   presence must survive reduced motion, with only the transition reaching them zeroed.
+   ══════════════════════════════════════════════════════════════════════════════════════════ */
+
+
+/* ── S2: Overview (/) ─────────────────────────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: no-preference) {
+  /* TvlCard's venue bars draw themselves once, on the card's first reveal. The inline `width: X%`
+     still carries the true value — a `transition-[width]` here would redraw all five bars on every
+     30s markets poll, forever. A bar that mounts AFTER the card is already shown matches the
+     [data-shown] rule with no before-change style, so it appears at full width and never animates.
+     `--i` is inherited from the <li>, which carries the sibling stagger. */
+  html.js [data-reveal] .venue-bar-fill {
+    transform: scaleX(0);
+    transform-origin: left center;
+    transition: transform var(--dur-draw) var(--ease-lead)
+      calc(min(var(--i, 0), 6) * var(--beat-sibling));
+  }
+  html.js [data-reveal][data-shown] .venue-bar-fill {
+    transform: none;
+  }
+
+  /* The only scroll-linked timeline on this route. Just the hero's aria-hidden gradient moves: the
+     <dl> of four live stats above it never parallaxes, and the hero never fades out — it is live
+     data, not a splash screen. The element carries 48px of vertical overscan in Hero.tsx, so this
+     64px of travel can never expose an unpainted edge. Absent in release Firefox, where the
+     fallback is today's static gradient. It MUST stay inside the no-preference block: the reduced
+     block's `animation-timeline: none !important` would otherwise turn this into a 0.01ms
+     time-based animation that parks the layer 40px down, permanently. */
+  @supports (animation-timeline: view()) {
+    .hero-glow {
+      animation: hero-glow-drift linear both;
+      animation-timeline: view(block);
+      animation-range: cover 0% cover 100%;
+    }
+  }
+  @keyframes hero-glow-drift {
+    from {
+      transform: translate3d(0, -24px, 0);
+    }
+    to {
+      transform: translate3d(0, 40px, 0);
+    }
+  }
+}
+
+/* ── S3: /screener ────────────────────────────────────────────────────────────────────────────
+   Place these two rules OUTSIDE the `prefers-reduced-motion: no-preference` block, next to the
+   `.site-header` scrim, which follows the same pattern: the shadow IS the state, so it must exist
+   under reduced motion; only the transition reaching it is zeroed by the blanket reset. Colour and
+   shadow only — no transform, no height change, nothing that reflows a row mid-read. */
+.filterbar {
+  transition:
+    box-shadow 200ms var(--ease-lead),
+    border-bottom-color 200ms var(--ease-lead);
+}
+.filterbar[data-stuck] {
+  box-shadow: 0 8px 20px -18px rgb(0 0 0 / 0.9);
+  border-bottom-color: rgb(var(--hairline) / 0.18);
+}
+
+/* The sort/page sweep's base state, also UNGATED and also outside the media query. With no JS — or
+   under reduced motion, where the animation below never matches — this decorative 1px hairline must
+   simply never appear, rather than sitting permanently lit across the bottom of the filter bar. */
+.sweep {
+  opacity: 0;
+}
+
+/* And these go INSIDE the existing `@media (prefers-reduced-motion: no-preference)` block: */
+@media (prefers-reduced-motion: no-preference) {
+  /* One 420ms hairline acknowledging a re-sort or a page change, drawn left to right and then
+     faded out. `backwards`, never `forwards`: the element has to fall back to its base opacity of
+     0 when the animation is over. It is childless and 1px tall, which is the only reason keying it
+     (and therefore remounting it) is safe where remounting a <tbody> would not be. */
+  html.js .sweep {
+    animation: sweep 420ms var(--ease-lead) backwards;
+    transform-origin: 0 50%;
+  }
+  @keyframes sweep {
+    0% {
+      transform: scaleX(0);
+      opacity: 1;
+    }
+    70% {
+      transform: scaleX(1);
+      opacity: 1;
+    }
+    100% {
+      transform: scaleX(1);
+      opacity: 0;
+    }
+  }
+}
+
+/* ── S4: /trade ─────────────────────────────────────────────────────────────────────────────
+   All rules are leaf-level. Nothing here touches <html>, <body>, <main> or any ancestor of
+   .ambient. Blocks 1-3 go INSIDE the existing @media (prefers-reduced-motion: no-preference)
+   block; `.press-tint` must sit AFTER `.press` in that block. Blocks 4-6 are top-level.
+   ─────────────────────────────────────────────────────────────────────────────────────────── */
+
+/* 1. OPTIONAL BUT RECOMMENDED — a real regression fix, not a /trade nicety.
+   `.press` sets `transition` as a SHORTHAND, so it resets the property list to `transform` on
+   every control it is added to and silently kills the 160ms hover tint those controls already
+   had. This restores it without touching the press model; `.press:active` still wins on
+   specificity, so press-down stays flat and 90ms. (The same shorthand currently overrides the
+   explicit property list on Button.tsx:50 and the `transition-colors` on CopyButton — adding this
+   fixes those too. If you skip it my components still work: they just lose the colour easing.) */
+.press-tint {
+  transition:
+    transform var(--dur-scrim) var(--ease-lead),
+    color var(--dur-ui) var(--ease-lead),
+    border-color var(--dur-ui) var(--ease-lead),
+    background-color var(--dur-ui) var(--ease-lead);
+}
+
+/* 2. REQUIRED — /trade token pill: a 180ms dip acknowledging that the user changed the token.
+   A dip, not an overshoot: --ease-detent stays spent on its three licensed elements. Driven by a
+   class toggle from TokenPicker, never by a key, so the <img> is not remounted. */
+.token-pop {
+  animation: token-pop 180ms var(--ease-lead);
+}
+@keyframes token-pop {
+  0%,
+  100% {
+    transform: none;
+  }
+  50% {
+    transform: scale(0.96);
+  }
+}
+
+/* 3. REQUIRED — /trade TokenPicker panel. Enters from the edge it is docked to; the breakpoint is
+   the media query itself, so there is no matchMedia read and no first-render mismatch. Enter only.
+   The component keeps `animate-fade-in` as a fallback, so omitting this degrades to a plain fade
+   rather than to nothing. */
+html.js .tp-panel {
+  animation: tp-sheet 190ms var(--ease-lead) both;
+}
+@keyframes tp-sheet {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes tp-dialog {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ↑ end of the no-preference block. Everything below is TOP-LEVEL. ↑ */
+
+/* 4. REQUIRED — the >=640px branch of the picker panel. */
+@media (prefers-reduced-motion: no-preference) and (min-width: 640px) {
+  html.js .tp-panel {
+    animation-name: tp-dialog;
+  }
+}
+
+/* 5. REQUIRED — /trade primary CTA, the route's one reward moment. Ungated on purpose: the glow's
+   PRESENCE is a state, not motion, and only its 220ms crossfade sits in a no-preference block.
+   The shadow value never changes; only a compositable opacity does. `box-shadow: none` replaces
+   the button's own primary-variant shadow (this rule is later in the file, so it wins on order;
+   `disabled:shadow-none` is more specific and sets the same value, so it is unaffected). */
+.cta-glow {
+  position: relative;
+  box-shadow: none;
+}
+.cta-glow::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: 0 8px 30px -8px rgb(var(--accent-glow) / 0.75);
+  opacity: 0;
+  pointer-events: none;
+}
+.cta-glow:not(:disabled)::after {
+  opacity: 1;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .cta-glow::after {
+    transition: opacity var(--dur-scrim) var(--ease-lead);
+  }
+}
+
+/* 6. OPTIONAL — your call, but an acceptance criterion depends on it. _CONTRACT.md's REDUCED
+   MOTION criterion says "the /trade ImpactValue still fades grey → amber → red", and the blanket
+   reset at the bottom of globals.css currently zeroes it along with everything else
+   (`transition-duration: 0.01ms !important` applies to colour too). If you want that criterion to
+   actually pass, this must go INSIDE the existing @media (prefers-reduced-motion: reduce) block,
+   AFTER the blanket reset — the `impact-tint` hook is already on the element. */
+@media (prefers-reduced-motion: reduce) {
+  /* Colour is not a vestibular trigger, and this is the most informative signal on /trade. */
+  .impact-tint {
+    transition-duration: 260ms !important;
+  }
+}
+
+/* ── S5: /portfolio + /send ──────────────────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: no-preference) {
+/* S5 /portfolio — NFT tiles. Adds a scale to the shared reveal for grid tiles only, keyed off an
+     extra attribute so every other [data-reveal] in the app is untouched. --rise-card is overridden
+     to 10px on the tile itself, so this resolves to translateY(10px) scale(.985). */
+  html.js [data-reveal][data-reveal-scale]:not([data-shown]) {
+    transform: translateY(var(--rise-card)) scale(0.985);
+  }
+
+  /* S5 /send — the confirmation card, this surface's one --ease-settle entrance. Nothing here
+     loops: an infinite animation on a financial confirmation never stops. */
+  @keyframes send-confirm {
+    from {
+      opacity: 0;
+      transform: translateY(10px) scale(0.985);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+}
+
+/* ── S6: /bridge ────────────────────────────────────────────────────────────────────────────
+   Both rules belong inside the existing @media (prefers-reduced-motion: no-preference) block —
+   the wrapper below is here so they can be pasted verbatim if that is easier. Suggested home is
+   immediately after the `.pw:not([data-pw-active]) .pw-inner` rule. */
+@media (prefers-reduced-motion: no-preference) {
+  /* The one-word accent sweep on /bridge's h1, and the only place in the app licensed to animate
+     background-position: a paint, banned on large surfaces, admissible on a single five-character
+     word (~90x34px) running exactly once. The gradient is authored accent -> accent-2 -> accent so
+     the repeat is seamless, and its resting window (position 0 across a 200% size) is the same
+     accent -> accent-2 ramp as the header wordmark, so the settled state is identical to plain
+     .accent-text. Higher specificity than the layered .accent-text it overrides. */
+  html.js .accent-sweep {
+    background-image: linear-gradient(
+      100deg,
+      rgb(var(--accent)) 0%,
+      rgb(var(--accent-2)) 50%,
+      rgb(var(--accent)) 100%
+    );
+    background-size: 200% 100%;
+    background-position: 0 0;
+    animation: accent-sweep var(--dur-draw) var(--ease-lead) both;
+  }
+  @keyframes accent-sweep {
+    from {
+      background-position: 120% 0;
+    }
+    to {
+      background-position: 0 0;
+    }
+  }
+
+  /* /bridge's ordinal badges. Preflight strips the native <ol> marker, so this badge IS the list
+     ordinal — the one beat on that route carrying meaning rather than decoration. It lands 80ms
+     behind its own card (which is on the [data-enter] ladder, hence --beat-enter), so the user
+     watches 1, 2, 3, 4 count on. Two animations rather than one, to keep the brief's split timing:
+     opacity on the house curve, transform on the detent. Overshoot stays at ~1.06 — 2px on a 32px
+     circle; anything larger makes the numeral briefly illegible, and the numeral is the content.
+     Scaling the badge scales its existing accent shadow inside the same raster, which is free and
+     is NOT the banned 'animate box-shadow'. Cannot replay: STEPS is a module-level const keyed by
+     step.n and /bridge holds no query. */
+  html.js .step-badge {
+    animation:
+      badge-fade 300ms var(--ease-lead) both,
+      badge-detent 380ms var(--ease-detent) both;
+    animation-delay: calc(min(var(--i, 0), 4) * var(--beat-enter) + 80ms);
+  }
+  @keyframes badge-fade {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+  @keyframes badge-detent {
+    from {
+      transform: scale(0.72);
+    }
+    to {
+      transform: none;
+    }
   }
 }

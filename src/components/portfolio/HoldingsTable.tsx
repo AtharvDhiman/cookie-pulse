@@ -98,18 +98,33 @@ export function HoldingsTable({
 }) {
   const rows = buildRows(cookAmount, cookUsd, balances);
 
+  // Keyed on the STATE, never on rows.length: the balances array is re-sorted by value on the 30s
+  // poll and its length moves whenever a dust account appears, so a length-derived key would
+  // re-fade this slot several times a minute for no reason.
+  const slotState: 'error' | 'count' | 'none' = isError
+    ? 'error'
+    : !isLoading && rows.length > 0
+      ? 'count'
+      : 'none';
+
   return (
-    <Card as="section" className="overflow-hidden">
+    // `solid`, not `glass`: this panel reveals, and transforming a backdrop-filtered element makes
+    // the compositor re-sample and re-blur its entire backdrop every frame — with the ambient layer
+    // drifting underneath it. The reveal attributes go on the Card itself rather than on a wrapper,
+    // which would place a transform ancestor over the overflow-x-auto scroller below.
+    <Card as="section" variant="solid" reveal revealIndex={0} className="overflow-hidden">
       <header className="flex items-center justify-between gap-2 border-b border-hairline/10 px-4 py-3">
         <h2 className="text-sm font-bold tracking-tight">Holdings</h2>
         {/* A failed read must never read as "you own nothing", so say the list is incomplete. */}
-        {isError ? (
-          <Pill tone="warn">Incomplete</Pill>
-        ) : !isLoading && rows.length > 0 ? (
-          <span className="text-xs text-muted">
-            {rows.length} asset{rows.length === 1 ? '' : 's'}
-          </span>
-        ) : null}
+        <span key={slotState} className="animate-fade-in">
+          {slotState === 'error' ? (
+            <Pill tone="warn">Incomplete</Pill>
+          ) : slotState === 'count' ? (
+            <span className="text-xs text-muted">
+              {rows.length} asset{rows.length === 1 ? '' : 's'}
+            </span>
+          ) : null}
+        </span>
       </header>
 
       {isLoading ? (
@@ -127,9 +142,11 @@ export function HoldingsTable({
               hint="This wallet holds no COOK and no token accounts on Cookie Chain."
             />
             <div className="flex justify-center">
+              {/* inline-flex is load-bearing: an <a> is display:inline by default and a transform
+                  on an inline box is silently ignored, so the lift would do nothing. */}
               <Link
                 href="/bridge"
-                className="rounded-xl border border-hairline/10 bg-surface2 px-3 py-2 text-xs font-semibold transition-colors hover:border-accent/50"
+                className="inline-flex items-center rounded-xl border border-hairline/10 bg-surface2 px-3 py-2 text-xs font-semibold transition-[transform,border-color] duration-[160ms] ease-[cubic-bezier(.2,.7,.3,1)] hover:-translate-y-px hover:border-accent/50"
               >
                 How to get COOK
               </Link>
@@ -137,7 +154,11 @@ export function HoldingsTable({
           </div>
         )
       ) : (
-        <div className="overflow-x-auto">
+        // Opacity only, at the skeleton -> content swap. The ~228px -> ~700px height jump under it
+        // is accepted: animating it would mean animating height, and a crossfade only makes the
+        // difference more noticeable. Nothing below this line moves — no transform reaches a
+        // <tr> or a <td>, on this route or any other.
+        <div className="animate-fade-in overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-hairline/10 text-left text-[10px] uppercase tracking-wider text-muted">

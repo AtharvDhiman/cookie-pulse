@@ -3,7 +3,7 @@
 // Overview. Four reads, all shared through React Query: chain health (batched RPC, 15s), the token
 // registry (which carries cookUsd at the top level, so no separate price call), the markets snapshot
 // and the activity feed.
-import type { ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import Link from 'next/link';
 import { ArrowUpRight, Droplets } from 'lucide-react';
 import { useMarkets, useRegistry } from '@/hooks/useMarketData';
@@ -34,7 +34,14 @@ function CardHeading({ title, cta }: { title: string; cta: string }) {
       <h2 className="text-[11px] font-semibold uppercase tracking-wider text-muted">{title}</h2>
       <span className="inline-flex shrink-0 items-center gap-0.5 text-[11px] font-semibold text-muted transition-colors group-hover:text-accent">
         {cta}
-        <ArrowUpRight size={12} aria-hidden="true" />
+        {/* The arrow moves, the card does not. These are panels the user hovers in order to READ a
+            live number; an unbounded hover transform on the panel itself would re-composite the
+            whole surface for as long as the pointer rests there. */}
+        <ArrowUpRight
+          size={12}
+          aria-hidden="true"
+          className="transition-transform duration-200 motion-safe:group-hover:translate-x-0.5 motion-safe:group-hover:-translate-y-0.5"
+        />
       </span>
     </div>
   );
@@ -48,7 +55,10 @@ function CookPriceCard() {
   const change24h = byMint.get(COOK_MINT)?.change24h ?? null;
 
   return (
-    <Card as="section" className="overflow-hidden">
+    // `variant="solid"` is required by the reveal, not a style choice: the reveal transforms this
+    // element, and transforming a backdrop-filtered surface forces the compositor to re-sample and
+    // re-blur its entire backdrop every frame — and visibly shifts its tint while it does.
+    <Card as="section" variant="solid" className="overflow-hidden" reveal revealIndex={0}>
       <CardLink href="/screener">
         <CardHeading title={`${COOK_SYMBOL} price`} cta="Screener" />
 
@@ -58,12 +68,16 @@ function CookPriceCard() {
             <Skeleton className="h-3 w-24" />
           </div>
         ) : isError || cookUsd === null ? (
+          // No fade on the failure branch: `isError` flips on a 30s poll, and ceremony on an error
+          // that appears and disappears four times a minute is exactly the flicker the system bans.
           <div className="mt-3">
             <p className="text-2xl font-extrabold tabular-nums text-muted">—</p>
             <p className="mt-1 text-xs text-muted">Cookiescan price feed unavailable.</p>
           </div>
         ) : (
-          <>
+          // The resolved block crossfades in over the skeleton. Its contents do not stagger — the
+          // price is the reason the card exists and it arrives whole.
+          <div className="enter-fade">
             <p className="mt-3 text-2xl font-extrabold tabular-nums sm:text-3xl">
               {formatUsd(cookUsd)}
             </p>
@@ -71,7 +85,7 @@ function CookPriceCard() {
               <Change value={change24h} className="text-[13px] font-semibold" />
               <span>24h</span>
             </p>
-          </>
+          </div>
         )}
 
         {/* "6,473 tokens" would read as 6,473 comparable assets; three quarters of the registry is
@@ -93,8 +107,11 @@ function CookPriceCard() {
 function VenueBar({ share }: { share: number }) {
   return (
     <span className="block h-1 w-full overflow-hidden rounded-full bg-surface2" aria-hidden="true">
+      {/* `venue-bar-fill` draws the bar once, on the card's first reveal, with scaleX. The inline
+          width below still carries the true value — a transition on `width` would redraw all five
+          bars on every 30s markets poll, forever. */}
       <span
-        className="block h-full rounded-full bg-accent/70"
+        className="venue-bar-fill block h-full rounded-full bg-accent/70"
         // The 2% floor keeps a tiny-but-real share visible; a true zero draws nothing.
         style={{ width: `${share > 0 ? Math.min(100, Math.max(2, share)) : 0}%` }}
       />
@@ -107,7 +124,15 @@ function TvlCard() {
   const total = data?.tvlUsd ?? 0;
 
   return (
-    <Card as="section" className="overflow-hidden lg:col-span-2">
+    // revealIndex 1 puts this one 90ms behind the price card, so the grid row reads left to right.
+    // On mobile they stack and cross the fold separately, where the delay is invisible.
+    <Card
+      as="section"
+      variant="solid"
+      className="overflow-hidden lg:col-span-2"
+      reveal
+      revealIndex={1}
+    >
       <CardLink href="/screener">
         <CardHeading title="Total value locked" cta="Screener" />
 
@@ -127,7 +152,7 @@ function TvlCard() {
             hint="Cookiescan did not return the pool list. It retries every 30 seconds."
           />
         ) : (
-          <>
+          <div className="enter-fade">
             <p className="mt-3 text-2xl font-extrabold tabular-nums sm:text-3xl">
               {formatUsd(data.tvlUsd)}
             </p>
@@ -140,8 +165,10 @@ function TvlCard() {
               <p className="mt-4 text-xs text-muted">No pools reported by the markets feed.</p>
             ) : (
               <ul className="mt-4 space-y-2.5">
-                {data.venues.map((v) => (
-                  <li key={v.venue}>
+                {/* Keys stay `v.venue`, so a 30s poll that returns the same venues reconciles in
+                    place and nothing here replays. `--i` only ever runs on the first reveal. */}
+                {data.venues.map((v, i) => (
+                  <li key={v.venue} data-stagger="" style={{ '--i': i } as CSSProperties}>
                     <div className="flex items-baseline justify-between gap-2 text-xs">
                       <span className="min-w-0 truncate font-medium capitalize text-ink2">
                         {v.venue.toLowerCase()}
@@ -158,7 +185,7 @@ function TvlCard() {
                 ))}
               </ul>
             )}
-          </>
+          </div>
         )}
       </CardLink>
     </Card>
@@ -173,6 +200,12 @@ function CapitalMapSection() {
 export default function OverviewPage() {
   return (
     // The <h1> lives in <Hero>, so there is exactly one on the page.
+    //
+    // NEITHER wrapper below carries a reveal. Putting one on the ~2,000px <section> would treat the
+    // whole page as a single target: with the armed fold it crosses the threshold at load, and every
+    // card inside it would already be revealed before the user scrolled a pixel. The reveal targets
+    // are the individual Cards, which is also why there are no wrapper divs — TvlCard declares its
+    // own `lg:col-span-2` and a wrapper would become the grid item and swallow the span.
     <div className="space-y-4 py-1 sm:space-y-5">
       <Hero />
 

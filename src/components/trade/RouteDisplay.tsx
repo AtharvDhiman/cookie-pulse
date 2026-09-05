@@ -284,6 +284,13 @@ export function RouteDisplay({
   check?: RouteCheck | null;
 }) {
   const hops = groupByHop(quote.segments);
+  // Where each hop's legs start in the overall walk, so the entrance cascades once down the whole
+  // route instead of restarting the ladder inside every hop.
+  const legOffsets: number[] = [];
+  for (let i = 0, run = 0; i < hops.length; i += 1) {
+    legOffsets.push(run);
+    run += hops[i].legs.length;
+  }
   // `path` is the router's own token walk; fall back to the segment mints if it ever comes back thin.
   const path =
     quote.path.length >= 2
@@ -304,10 +311,19 @@ export function RouteDisplay({
     <div className="space-y-3">
       {check ? <CheckBanner check={check} out={out} /> : null}
 
+      {/* This whole block draws itself once, on a 45ms beat: chips, then the pills, then the legs,
+          closing by ~720ms. The `both` fill is safe HERE AND ONLY HERE in the app, because
+          RouteDisplay renders only once a client-side quote exists and can therefore never appear
+          in server HTML — there is no no-JS state for it to strand. It does not replay on the 10s
+          poll: every key below is stable across a refetch, so nothing remounts. */}
       {path.length > 0 ? (
         <div className="flex flex-wrap items-center gap-1.5">
           {path.map((mint, i) => (
-            <span key={`${mint}-${i}`} className="flex min-w-0 items-center gap-1.5">
+            <span
+              key={`${mint}-${i}`}
+              className="flex min-w-0 animate-rise-in items-center gap-1.5"
+              style={{ animationDelay: `${Math.min(i, 5) * 45}ms` }}
+            >
               {i > 0 ? <ArrowRight size={13} className="shrink-0 text-muted" aria-hidden="true" /> : null}
               <PathChip mint={mint} byMint={byMint} />
             </span>
@@ -315,13 +331,13 @@ export function RouteDisplay({
         </div>
       ) : null}
 
-      <div className="flex flex-wrap gap-1.5">
+      <div className="flex animate-rise-in flex-wrap gap-1.5" style={{ animationDelay: '180ms' }}>
         {quote.isMultiHop ? <Pill>{hops.length} hops</Pill> : <Pill>Direct</Pill>}
         {quote.isSplit ? <Pill tone="accent">Split across {quote.segments.length} pools</Pill> : null}
       </div>
 
       <ol className="space-y-2">
-        {hops.map(({ hopIndex, legs }) => (
+        {hops.map(({ hopIndex, legs }, hi) => (
           <li key={hopIndex}>
             {hops.length > 1 ? (
               <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted">
@@ -332,10 +348,15 @@ export function RouteDisplay({
             ) : null}
 
             <ul className="space-y-1.5">
-              {legs.map((leg) => (
+              {legs.map((leg, i) => (
+                // BEHAVIOURAL FIX, and it is what makes the entrance safe: the key used to carry
+                // `leg.inAmount`, which moves with the market on multi-hop and split routes — so
+                // every leg row genuinely remounted on the 10s poll. Position within its hop is
+                // stable across a refetch; the amount is not.
                 <li
-                  key={`${leg.hopIndex}-${leg.pool}-${leg.inAmount}`}
-                  className="flex items-center justify-between gap-2 rounded-xl border border-hairline/10 bg-surface2 px-2.5 py-2"
+                  key={`${leg.hopIndex}-${leg.pool}-${i}`}
+                  className="flex animate-rise-in items-center justify-between gap-2 rounded-xl border border-hairline/10 bg-surface2 px-2.5 py-2"
+                  style={{ animationDelay: `${220 + Math.min(legOffsets[hi] + i, 5) * 50}ms` }}
                 >
                   <div className="flex min-w-0 items-center gap-2">
                     <span className="truncate text-xs font-semibold">{prettyVenue(leg.venue)}</span>
@@ -352,10 +373,16 @@ export function RouteDisplay({
                       target="_blank"
                       rel="noopener noreferrer"
                       title={leg.pool}
-                      className="inline-flex shrink-0 items-center gap-1 font-mono text-[11px] text-muted transition-colors hover:text-accent"
+                      className="group inline-flex shrink-0 items-center gap-1 font-mono text-[11px] text-muted transition-colors hover:text-accent"
                     >
                       {shortAddr(leg.pool)}
-                      <ExternalLink size={11} aria-hidden="true" />
+                      {/* 1px along the glyph's own diagonal, on hover AND focus-visible, so a
+                          keyboard user gets the same affordance as a pointer. */}
+                      <ExternalLink
+                        size={11}
+                        aria-hidden="true"
+                        className="transition-transform duration-[160ms] ease-[cubic-bezier(.2,.7,.3,1)] group-hover:-translate-y-px group-hover:translate-x-px group-focus-visible:-translate-y-px group-focus-visible:translate-x-px"
+                      />
                     </a>
                   ) : (
                     <span className="shrink-0 text-[11px] text-muted">pool unknown</span>

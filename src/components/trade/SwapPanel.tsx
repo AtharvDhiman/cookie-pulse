@@ -10,7 +10,7 @@ import Link from 'next/link';
 import { VersionedTransaction } from '@solana/web3.js';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { useWalletModal } from '@solana/wallet-adapter-react-ui';
-import { AlertTriangle, ArrowDownUp, ArrowUpRight, Loader2, PauseCircle, RotateCw } from 'lucide-react';
+import { AlertTriangle, ArrowDownUp, ArrowUpRight, PauseCircle, RotateCw } from 'lucide-react';
 import { postSwapTx } from '@/lib/api';
 import {
   COOK_DECIMALS,
@@ -116,7 +116,12 @@ function ImpactValue({ pct }: { pct: number | null }) {
   return (
     <span
       className={cn(
-        'tabular-nums',
+        // The most informative motion on this route, and the one that is MEANT to survive reduced
+        // motion: colour is not a vestibular trigger, so raising the amount walks grey → amber →
+        // red instead of snapping between three unrelated states. Colour only — a figure the user
+        // is about to sign for never scales, pulses or shakes. `impact-tint` is the hook the
+        // reduced-motion exemption needs; see the note in the S4 handoff.
+        'impact-tint tabular-nums transition-colors duration-[260ms] ease-out',
         pct > HIGH_IMPACT_PCT ? 'text-down' : pct > WARN_IMPACT_PCT ? 'text-warn' : 'text-ink2',
       )}
     >
@@ -137,10 +142,14 @@ function TxErrorPanel({
   onDismiss: () => void;
 }) {
   const actionClass =
-    'rounded-md border border-hairline/10 bg-surface2 px-2.5 py-1.5 text-xs font-semibold text-ink transition-colors hover:border-accent/60';
+    'press press-sm press-tint rounded-md border border-hairline/10 bg-surface2 px-2.5 py-1.5 text-xs font-semibold text-ink transition-colors hover:border-accent/60';
 
   return (
-    <div className="rounded-xl border border-down/40 bg-down/10 p-3">
+    // 120ms, opacity only. An error must appear instantly, not gracefully — the fade exists only to
+    // blunt the pop. Deliberately no height animation: this panel pushes the primary button down, so
+    // animating its height would extend the window in which the button slides out from under the
+    // pointer the user is already moving toward it.
+    <div className="animate-[fade-in_120ms_ease-out] rounded-xl border border-down/40 bg-down/10 p-3">
       <div className="flex items-start gap-2">
         <AlertTriangle size={15} className="mt-0.5 shrink-0 text-down" aria-hidden="true" />
         <div className="min-w-0 flex-1">
@@ -179,7 +188,7 @@ function TxErrorPanel({
             <button
               type="button"
               onClick={onDismiss}
-              className="rounded-md px-2.5 py-1.5 text-xs font-semibold text-muted transition-colors hover:text-ink"
+              className="press press-sm press-tint rounded-md px-2.5 py-1.5 text-xs font-semibold text-muted transition-colors hover:text-ink"
             >
               Dismiss
             </button>
@@ -215,6 +224,13 @@ export function SwapPanel({
   const [amount, setAmount] = useState('');
   const [slippageBps, setSlippageBps] = useState<number>(DEFAULT_SLIPPAGE_BPS);
   const [customSlippage, setCustomSlippage] = useState('');
+
+  /**
+   * How many times the pair has been flipped, ever. MONOTONIC, not a 0/180 boolean: the glyph is
+   * near-symmetric under a half turn, so the rotation is the only signal the swap happened — and a
+   * boolean would wind the icon BACKWARDS on every second press, which reads as "undo", not "swap".
+   */
+  const [flips, setFlips] = useState(0);
 
   /**
    * What the last confirmed swap actually was. Not a status — `tx.state` and `tx.signature` remain
@@ -345,7 +361,10 @@ export function SwapPanel({
     safeBigInt(rawAmount) > spendableRaw;
   const samePair = inputMint !== null && inputMint === outputMint;
 
-  const { quote, noRoute, isQuoting, isRefreshing, isPaused, error: quoteError, refetch } =
+  // `isRefreshing` is deliberately NOT read: nothing on this route may key off a fetch. The quote
+  // refetches every 10 seconds — roughly 360 times an hour with the tab open — and a poll applies
+  // no force, so nothing is allowed to move on one.
+  const { quote, noRoute, isQuoting, isPaused, error: quoteError, refetch } =
     useQuote({
       inputMint,
       outputMint,
@@ -357,6 +376,20 @@ export function SwapPanel({
       // the one they read. The 10s refresh resumes the moment the run reaches confirmed or failed.
       paused: tx.pending,
     });
+
+  /**
+   * The quoting state this panel is allowed to RENDER, which is narrower than the hook's.
+   *
+   * `isQuoting` folds in `query.isFetching`, guarded by `!query.data` — and that guard silently
+   * stops holding the moment the router's answer IS empty. On a no-route pair `data` stays null
+   * and on a failed pair it stays undefined, so `isQuoting` flips true again on EVERY 10s
+   * background refetch. Left unguarded that is a skeleton, a shimmer and the primary button's
+   * spinner replacing a settled answer roughly 360 times an hour, none of it caused by the user.
+   * A poll applies no force: once the router has answered, this panel holds still until the user
+   * moves. The skeleton is still shown for the states the user did cause — a new pair, a new
+   * amount, a new slippage — because those change the query key, which resets both guards.
+   */
+  const quoting = isQuoting && !noRoute && quoteError === null;
 
   // Result of the last build-time re-quote, tagged with the quote it was computed against. Read
   // back only for that same quote, so a "matches your quote" confirmation can never outlive the
@@ -428,6 +461,7 @@ export function SwapPanel({
     setReceipt(null);
     setInputMint(outputMint);
     setOutputMint(inputMint);
+    setFlips((n) => n + 1);
   }
 
   function onAmountChange(value: string) {
@@ -531,7 +565,9 @@ export function SwapPanel({
     if (!hasAmount) return { label: 'Enter an amount', disabled: true, loading: false };
     if (exceedsBalance)
       return { label: `Not enough ${inputToken.symbol}`, disabled: true, loading: false };
-    if (isQuoting) return { label: 'Fetching quote…', disabled: true, loading: true };
+    // `quoting`, not `isQuoting`: `loading` mounts a spinning Loader2, and keying that off a
+    // background refetch would spin it for half a second every ten seconds, forever.
+    if (quoting) return { label: 'Fetching quote…', disabled: true, loading: true };
     if (noRoute) return { label: 'No route for this pair', disabled: true, loading: false };
     if (!quote) return { label: 'Quote unavailable', disabled: true, loading: false };
     return { label: `Swap ${inputToken.symbol} for ${outputToken.symbol}`, disabled: false, loading: false };
@@ -539,7 +575,17 @@ export function SwapPanel({
 
   return (
     <div className="grid grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-[minmax(0,26rem)_minmax(0,1fr)] lg:items-start">
-      <Card className="min-w-0 p-3 sm:p-4">
+      {/* One reveal for the whole panel, on the STABLE OUTER Card — never on the inner content,
+          which branch-swaps on every quote lifecycle change and would replay forever. `solid`
+          because it moves: transforming a backdrop-filtered surface makes the compositor re-sample
+          and re-blur its entire backdrop every frame. 380ms, so a panel this dense settles quickly.
+          Neither box, nor the flip button between them, gets an index of its own — see the flip. */}
+      <Card
+        variant="solid"
+        reveal
+        revealIndex={0}
+        className="min-w-0 p-3 [--dur-reveal:380ms] sm:p-4"
+      >
         {/* ---------------- you pay ---------------- */}
         <div className="rounded-xl border border-hairline/10 bg-surface2/60 p-3">
           <div className="mb-2 flex items-center justify-between gap-2">
@@ -564,7 +610,7 @@ export function SwapPanel({
                   type="button"
                   onClick={() => setAmount(maxAmountText)}
                   disabled={!maxAmountText || tx.pending}
-                  className="rounded-md border border-hairline/10 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-accent transition-colors hover:bg-accent/10 disabled:cursor-not-allowed disabled:opacity-40"
+                  className="press press-sm press-tint rounded-md border border-hairline/10 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-accent transition-colors hover:bg-accent/10 disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   Max
                 </button>
@@ -600,16 +646,27 @@ export function SwapPanel({
           </p>
         </div>
 
-        {/* ---------------- flip ---------------- */}
+        {/* ---------------- flip ----------------
+            This button is NOT a child of either box — it is a sibling pulled into the seam by
+            `-my-2.5`. That is exactly why the two boxes carry no stagger indices of their own:
+            mid-flight you would get the pay box at +9px, the button at 0 and the receive box at
+            +12px, and the control would visibly detach from the seam it straddles. */}
         <div className="relative z-10 -my-2.5 flex justify-center">
           <button
             type="button"
             onClick={flip}
             disabled={tx.pending}
             aria-label="Swap the input and output tokens"
-            className="rounded-xl border border-hairline/10 bg-surface p-2 text-ink2 transition-colors hover:border-accent/60 hover:text-accent disabled:cursor-not-allowed disabled:opacity-50"
+            className="press press-sm press-tint rounded-xl border border-hairline/10 bg-surface p-2 text-ink2 transition-colors hover:border-accent/60 hover:text-accent disabled:cursor-not-allowed disabled:opacity-50"
           >
-            <ArrowDownUp size={15} />
+            {/* One of the three elements in the app licensed to overshoot: ≤32px, and acknowledging
+                a human input rather than depicting data. */}
+            <span
+              className="block transition-transform duration-[420ms] [transition-timing-function:var(--ease-detent)]"
+              style={{ transform: `rotate(${flips * 180}deg)` }}
+            >
+              <ArrowDownUp size={15} />
+            </span>
           </button>
         </div>
 
@@ -629,12 +686,18 @@ export function SwapPanel({
 
           <div className="flex items-center gap-2">
             <div className="min-w-0 flex-1">
-              {isQuoting ? (
+              {quoting ? (
                 <Skeleton className="h-8 w-32" />
               ) : (
+                // `quoting` is the guarded flag: false for the whole of every background refetch,
+                // including the no-route and error states where the hook's own `!query.data` guard
+                // stops holding. So this element does NOT unmount on the 10s poll and the fade
+                // cannot replay on one — it remounts only when the query key changes (amount,
+                // slippage, token), i.e. only when the user caused it. The figure itself never
+                // counts up: it is what they are about to sign.
                 <output
                   className={cn(
-                    'block truncate text-2xl font-semibold tabular-nums',
+                    'block animate-fade-in truncate text-2xl font-semibold tabular-nums',
                     outAmount !== null ? 'text-ink' : 'text-muted',
                   )}
                 >
@@ -679,7 +742,11 @@ export function SwapPanel({
                 disabled={tx.pending}
                 aria-pressed={slippageBps === bps && customSlippage === ''}
                 className={cn(
-                  'rounded-md border px-2 py-1 text-xs font-semibold tabular-nums transition-colors',
+                  // No sliding indicator between the three: that is a shared-element layout
+                  // animation needing refs, measurement and resize handling for three 40px
+                  // buttons, and it would fight the aria-pressed semantics that already say
+                  // which one is on.
+                  'press press-sm press-tint rounded-md border px-2 py-1 text-xs font-semibold tabular-nums transition-colors',
                   'disabled:cursor-not-allowed disabled:opacity-50',
                   slippageBps === bps && customSlippage === ''
                     ? 'border-accent/60 bg-accent/15 text-accent'
@@ -690,7 +757,7 @@ export function SwapPanel({
               </button>
             ))}
           </div>
-          <div className="flex items-center gap-1 rounded-md border border-hairline/10 bg-surface2 px-2 py-1">
+          <div className="flex items-center gap-1 rounded-md border border-hairline/10 bg-surface2 px-2 py-1 transition-colors duration-[160ms] focus-within:border-accent/40">
             <input
               type="text"
               inputMode="decimal"
@@ -707,7 +774,7 @@ export function SwapPanel({
             <span className="text-xs text-muted">%</span>
           </div>
           {customSlippage !== '' && Number(customSlippage) * 100 > MAX_SLIPPAGE_BPS ? (
-            <span className="text-[11px] font-medium text-warn">
+            <span className="animate-[fade-in_120ms_ease-out] text-[11px] font-medium text-warn">
               Capped at {slippageLabel(MAX_SLIPPAGE_BPS)}
             </span>
           ) : null}
@@ -742,7 +809,7 @@ export function SwapPanel({
               </>
             ) : (
               <p className="py-1 text-xs text-muted">
-                {isQuoting
+                {quoting
                   ? 'Asking the Cookiebox router…'
                   : 'Enter an amount to see the rate, minimum received and fee.'}
               </p>
@@ -750,10 +817,13 @@ export function SwapPanel({
           </div>
         )}
 
-        {/* ---------------- inline warnings ---------------- */}
+        {/* ---------------- inline warnings ----------------
+            Every block below enters on the same 120ms opacity, and nothing here animates height:
+            each one pushes the primary button down, and a growing box would drag the target out
+            from under a pointer already moving toward it. */}
         <div className="mt-3 space-y-2">
           {noRoute ? (
-            <div className="rounded-xl border border-hairline/10 bg-surface2 p-3 text-xs text-ink2">
+            <div className="animate-[fade-in_120ms_ease-out] rounded-xl border border-hairline/10 bg-surface2 p-3 text-xs text-ink2">
               <p className="font-semibold text-ink">No route for this pair.</p>
               <p className="mt-0.5 text-muted">
                 Cookiebox has no pool path from {inputToken?.symbol ?? 'this token'} to{' '}
@@ -763,7 +833,7 @@ export function SwapPanel({
           ) : null}
 
           {quoteError ? (
-            <div className="flex items-start gap-2 rounded-xl border border-warn/40 bg-warn/10 p-3">
+            <div className="flex animate-[fade-in_120ms_ease-out] items-start gap-2 rounded-xl border border-warn/40 bg-warn/10 p-3">
               <AlertTriangle size={15} className="mt-0.5 shrink-0 text-warn" aria-hidden="true" />
               <div className="min-w-0 flex-1">
                 <p className="text-xs font-semibold text-ink">Could not reach the router.</p>
@@ -772,7 +842,7 @@ export function SwapPanel({
               <button
                 type="button"
                 onClick={refetch}
-                className="shrink-0 rounded-md border border-hairline/10 bg-surface2 px-2 py-1 text-[11px] font-semibold transition-colors hover:border-accent/60"
+                className="press press-sm press-tint shrink-0 rounded-md border border-hairline/10 bg-surface2 px-2 py-1 text-[11px] font-semibold transition-colors hover:border-accent/60"
               >
                 Retry
               </button>
@@ -782,7 +852,7 @@ export function SwapPanel({
           {/* What the chain holds about the token being received. Facts with their source, never a
               verdict — the words "unsafe", "scam" and "rug" appear nowhere in this app's copy. */}
           {outputNotes.length > 0 && outputToken ? (
-            <div className="rounded-xl border border-hairline/10 bg-surface2/60 p-3">
+            <div className="animate-[fade-in_120ms_ease-out] rounded-xl border border-hairline/10 bg-surface2/60 p-3">
               <p className="text-[11px] font-semibold uppercase tracking-wider text-muted">
                 About {outputToken.symbol}
               </p>
@@ -803,7 +873,7 @@ export function SwapPanel({
           {/* Survives the toast. `tx.state` is the status source; the receipt only supplies the
               wording of the trade it describes, and is dropped as soon as the panel changes. */}
           {tx.state === 'confirmed' && receipt ? (
-            <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-up/40 bg-up/10 p-3">
+            <div className="flex animate-[fade-in_120ms_ease-out] flex-wrap items-center justify-between gap-2 rounded-xl border border-up/40 bg-up/10 p-3">
               <div className="min-w-0">
                 <p className="text-sm font-semibold text-up">Swap confirmed</p>
                 <p className="truncate text-xs text-ink2">{receipt.summary}</p>
@@ -823,7 +893,7 @@ export function SwapPanel({
           {/* A link named a mint that neither the registry nor a by-mint lookup could resolve, so
               the pair had to fall back. Say which one, rather than quietly trading something else. */}
           {unresolvedMint ? (
-            <div className="flex items-start gap-2 rounded-xl border border-warn/40 bg-warn/10 p-3">
+            <div className="flex animate-[fade-in_120ms_ease-out] items-start gap-2 rounded-xl border border-warn/40 bg-warn/10 p-3">
               <AlertTriangle size={15} className="mt-0.5 shrink-0 text-warn" aria-hidden="true" />
               <p className="text-xs text-ink2">
                 <strong className="text-ink">This link named a token we could not resolve.</strong>{' '}
@@ -834,7 +904,7 @@ export function SwapPanel({
           ) : null}
 
           {highImpact ? (
-            <div className="flex items-start gap-2 rounded-xl border border-down/40 bg-down/10 p-3">
+            <div className="flex animate-[fade-in_120ms_ease-out] items-start gap-2 rounded-xl border border-down/40 bg-down/10 p-3">
               <AlertTriangle size={15} className="mt-0.5 shrink-0 text-down" aria-hidden="true" />
               <p className="text-xs text-ink2">
                 <strong className="text-ink">
@@ -847,7 +917,7 @@ export function SwapPanel({
           ) : null}
 
           {exceedsBalance && inputToken ? (
-            <p className="text-xs text-warn">
+            <p className="animate-[fade-in_120ms_ease-out] text-xs text-warn">
               {inputToken.mint === COOK_MINT
                 ? `Keep at least ${FEE_RESERVE_COOK} ${COOK_SYMBOL} back — the fee, plus rent for the ` +
                   `two token accounts the router opens (${TOKEN_ACCOUNT_RENT_LAMPORTS.toLocaleString('en-US')} ` +
@@ -869,11 +939,16 @@ export function SwapPanel({
           ) : null}
         </div>
 
+        {/* The route's one reward moment: the trade becoming executable. `cta-glow` moves the accent
+            glow off the button's own box-shadow and onto a pre-painted aria-hidden ::after, so
+            what animates is a compositable opacity rather than a 30px-radius shadow repainting a
+            gradient-filled element. `press-wide` is the full-width scale. The nine-state label
+            never crossfades — it changes as the user types, and a fading word is unreadable. */}
         <Button
           onClick={swap}
           disabled={action.disabled}
           loading={action.loading}
-          className="mt-3 w-full"
+          className="cta-glow press-wide mt-3 w-full"
         >
           {action.label}
         </Button>
@@ -881,9 +956,11 @@ export function SwapPanel({
         <p className="mt-2 flex items-center justify-center gap-1.5 text-center text-[11px] text-muted">
           {isPaused ? (
             <PauseCircle size={11} aria-hidden="true" />
-          ) : isRefreshing ? (
-            <Loader2 size={11} className="animate-spin" aria-hidden="true" />
           ) : (
+            // Static, and never spun. The old spinner appeared and rotated on every 10s poll —
+            // motion the user did not cause, on the highest-frequency string on the page. A glyph
+            // that turns for half a second every ten seconds, forever, is noise; the sentence
+            // beside it already carries the whole meaning.
             <RotateCw size={11} aria-hidden="true" />
           )}
           {isPaused
@@ -893,32 +970,45 @@ export function SwapPanel({
       </Card>
 
       {/* ---------------- route ---------------- */}
-      <Card className="min-w-0 p-3 sm:p-4">
+      {/* Index 1 against the swap panel's 0: at desktop both cross the fold in the same observer
+          callback and the 90ms beat reads as a left-to-right settle in reading order; at mobile
+          this card is genuinely below the fold and the delay is never seen. */}
+      <Card variant="solid" reveal revealIndex={1} className="min-w-0 p-3 sm:p-4">
         <h2 className="text-[11px] font-semibold uppercase tracking-wider text-muted">Route</h2>
-        <div className="mt-3">
+        {/* A floor, not a fixed height: five different branches live here — empty, quoting,
+            no-route, resolved and registry-error — and without it the card jumped by ~90px every
+            time one replaced another, dragging the whole right column with it. */}
+        <div className="mt-3 min-h-[13rem]">
           {registryError ? (
-            <EmptyState
-              title="Token registry unavailable"
-              hint="Cookiescan did not answer. Quotes need it to resolve decimals and symbols."
-            />
+            <div className="animate-fade-in">
+              <EmptyState
+                title="Token registry unavailable"
+                hint="Cookiescan did not answer. Quotes need it to resolve decimals and symbols."
+              />
+            </div>
           ) : quote ? (
+            // No wrapper fade: RouteDisplay stages its own entrance, chips then pills then legs.
             <RouteDisplay quote={quote} byMint={byMint} check={routeCheck} />
-          ) : isQuoting ? (
-            <div className="space-y-2">
+          ) : quoting ? (
+            <div className="animate-fade-in space-y-2">
               <Skeleton className="h-7 w-48" />
               <Skeleton className="h-9 w-full" />
               <Skeleton className="h-9 w-full" />
             </div>
           ) : noRoute ? (
-            <EmptyState
-              title="No route for this pair"
-              hint="The aggregator found no pool path between these two tokens. Most pairs route through COOK."
-            />
+            <div className="animate-fade-in">
+              <EmptyState
+                title="No route for this pair"
+                hint="The aggregator found no pool path between these two tokens. Most pairs route through COOK."
+              />
+            </div>
           ) : (
-            <EmptyState
-              title="No quote yet"
-              hint="Pick a pair and enter an amount. The venues, pools and split percentages appear here."
-            />
+            <div className="animate-fade-in">
+              <EmptyState
+                title="No quote yet"
+                hint="Pick a pair and enter an amount. The venues, pools and split percentages appear here."
+              />
+            </div>
           )}
         </div>
       </Card>

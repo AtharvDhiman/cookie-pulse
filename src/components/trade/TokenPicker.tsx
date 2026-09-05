@@ -50,6 +50,7 @@ export function TokenPicker({ label, token, tokens, balances, loading, disabled,
   const [active, setActive] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
 
   const { rows, total } = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -84,6 +85,10 @@ export function TokenPicker({ label, token, tokens, balances, loading, disabled,
     setOpen(false);
     setQuery('');
     setActive(0);
+    // Focus was inside a dialog that is about to leave the DOM. Without this it falls to <body>
+    // and the next Tab restarts from the top of the document — the standard dialog obligation,
+    // and one this component was not meeting.
+    triggerRef.current?.focus();
   }, []);
 
   const choose = useCallback(
@@ -112,6 +117,25 @@ export function TokenPicker({ label, token, tokens, balances, loading, disabled,
 
   useEffect(() => setActive(0), [query]);
 
+  /**
+   * A 180ms dip acknowledging that the token on this pill actually changed — driven by a class
+   * toggle, never by `key={token.mint}`, which would remount the <img> and re-run its lazy load and
+   * its onError fallback on every swap. Deliberately silent for the two changes the user did not
+   * make: the first render, and the registry backfilling a null side once it resolves.
+   */
+  const selectedMint = token?.mint ?? null;
+  const [popping, setPopping] = useState(false);
+  const previousMint = useRef<string | null | undefined>(undefined);
+  useEffect(() => {
+    const before = previousMint.current;
+    previousMint.current = selectedMint;
+    if (before === undefined || before === null || selectedMint === null || before === selectedMint)
+      return;
+    setPopping(true);
+    const timer = setTimeout(() => setPopping(false), 200);
+    return () => clearTimeout(timer);
+  }, [selectedMint]);
+
   useEffect(() => {
     listRef.current?.querySelector<HTMLElement>(`[data-index="${active}"]`)?.scrollIntoView({
       block: 'nearest',
@@ -135,6 +159,7 @@ export function TokenPicker({ label, token, tokens, balances, loading, disabled,
   return (
     <>
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => setOpen(true)}
         disabled={disabled}
@@ -146,8 +171,9 @@ export function TokenPicker({ label, token, tokens, balances, loading, disabled,
             : `Select token to ${label}`
         }
         className={cn(
-          'flex shrink-0 items-center gap-1.5 rounded-full border border-hairline/10 bg-surface2 py-1.5 pl-1.5 pr-2.5',
+          'press press-sm press-tint flex shrink-0 items-center gap-1.5 rounded-full border border-hairline/10 bg-surface2 py-1.5 pl-1.5 pr-2.5',
           'text-sm font-semibold transition-colors hover:border-accent/50 disabled:cursor-not-allowed disabled:opacity-50',
+          popping && 'token-pop',
         )}
       >
         {token ? (
@@ -161,12 +187,14 @@ export function TokenPicker({ label, token, tokens, balances, loading, disabled,
         <ChevronDown size={14} className="text-muted" aria-hidden="true" />
       </button>
 
-      {/* Portalled to <body>: the swap Card is a `.glass` panel, and a non-none backdrop-filter
-          makes that card the containing block for fixed descendants — rendered in place, the
-          overlay would size itself to the card instead of the viewport. */}
+      {/* Portalled to <body>, and now doubly so: the swap Card carries a reveal, and a transformed
+          ancestor is the containing block for every fixed descendant — rendered in place, this
+          overlay would size itself to the card instead of the viewport for the length of the
+          reveal. The scrim fades WITH the panel rather than snapping in at full opacity behind a
+          fading dialog: the unanimated half was the more noticeable event of the two. */}
       {open ? createPortal(
         <div
-          className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 sm:items-center sm:p-4"
+          className="fixed inset-0 z-50 flex animate-[fade-in_160ms_ease-out] items-end justify-center bg-black/60 sm:items-center sm:p-4"
           onMouseDown={close}
         >
           <div
@@ -174,7 +202,10 @@ export function TokenPicker({ label, token, tokens, balances, loading, disabled,
             aria-modal="true"
             aria-label={`Select token to ${label}`}
             onMouseDown={(e) => e.stopPropagation()}
-            className="flex h-[86vh] w-full max-w-md animate-fade-in flex-col overflow-hidden rounded-t-2xl border border-hairline/10 bg-surface shadow-2xl sm:h-[34rem] sm:rounded-2xl"
+            // `tp-panel`: 24px up from the bottom edge it is docked to on mobile, a 0.97 scale at
+            // desktop where it is centred. The breakpoint is the CSS media query itself, so there
+            // is no matchMedia read and no first-render mismatch to reconcile.
+            className="tp-panel flex h-[86vh] w-full max-w-md animate-fade-in flex-col overflow-hidden rounded-t-2xl border border-hairline/10 bg-surface shadow-2xl sm:h-[34rem] sm:rounded-2xl"
           >
             <div className="flex items-center gap-2 border-b border-hairline/10 px-3 py-3">
               <div className="relative flex-1">
@@ -198,13 +229,21 @@ export function TokenPicker({ label, token, tokens, balances, loading, disabled,
                 type="button"
                 onClick={close}
                 aria-label="Close token list"
-                className="rounded-xl p-2 text-muted transition-colors hover:bg-surface2 hover:text-ink"
+                className="press press-sm press-tint rounded-xl p-2 text-muted transition-colors hover:bg-surface2 hover:text-ink"
               >
                 <X size={16} />
               </button>
             </div>
 
-            <ul ref={listRef} className="min-h-0 flex-1 overflow-y-auto p-1.5">
+            {/* p-2 and a matching scroll-padding, not p-1.5: :focus-visible is a 2px outline at 2px
+                offset, so at 6px the top and bottom rows had their rings clipped by the scroll
+                box — and `scrollIntoView({block:'nearest'})` parked them flush against the edge.
+                No `scroll-behavior: smooth` here, ever: ArrowDown key-repeat runs at ~30/s and
+                would queue a chain of smooth scrolls. */}
+            <ul
+              ref={listRef}
+              className="min-h-0 flex-1 overflow-y-auto p-2 [scroll-padding-block:8px]"
+            >
               {loading && rows.length === 0
                 ? Array.from({ length: 8 }, (_, i) => (
                     <li key={i} className="flex items-center gap-3 px-2.5 py-2">
@@ -235,8 +274,13 @@ export function TokenPicker({ label, token, tokens, balances, loading, disabled,
                       data-index={i}
                       onMouseEnter={() => setActive(i)}
                       onClick={() => choose(t.mint)}
+                      // ZERO per-row motion over 61 rows: they are keyed by mint, so a row that
+                      // survives a keystroke does not remount while a newly-matching one does — a
+                      // mount animation would animate an arbitrary partial subset as the user
+                      // types. 90ms on the highlight because ArrowDown key-repeat at ~30/s smears
+                      // anything longer across four rows behind the actual selection.
                       className={cn(
-                        'flex w-full items-center gap-3 rounded-xl px-2.5 py-2 text-left transition-colors',
+                        'flex w-full items-center gap-3 rounded-xl px-2.5 py-2 text-left transition-colors duration-[90ms]',
                         i === active ? 'bg-surface2' : 'hover:bg-surface2',
                       )}
                     >

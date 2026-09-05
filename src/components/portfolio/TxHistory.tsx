@@ -3,7 +3,7 @@
 // Last 20 signatures for the connected wallet. Ages are computed from a `now` held in state and
 // refreshed on a timer — calling Date.now() during render would produce a different string on the
 // server and the client and desync hydration.
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type CSSProperties } from 'react';
 import { ArrowUpRight } from 'lucide-react';
 import { COOK_SYMBOL, explorerTx } from '@/lib/config';
 import { formatAmount, shortAddr, timeAgo } from '@/lib/format';
@@ -21,7 +21,10 @@ export function TxHistory() {
   }, []);
 
   return (
-    <Card as="section" className="overflow-hidden">
+    // `solid`, not `glass`: the panel reveals, and a transform on a backdrop-filtered surface makes
+    // the compositor re-blur its whole backdrop every frame. No revealIndex — this block owns a
+    // sibling stagger of its own, and a block delay on top of it would read as lag.
+    <Card as="section" variant="solid" reveal className="overflow-hidden">
       <header className="flex items-center justify-between gap-2 border-b border-hairline/10 px-4 py-3">
         <h2 className="text-sm font-bold tracking-tight">Recent activity</h2>
         <span className="text-xs text-muted">Last {WALLET_TX_LIMIT}</span>
@@ -49,9 +52,17 @@ export function TxHistory() {
         />
       ) : (
         <ul>
-          {data.map((tx) => (
+          {/* A short stagger is right here where it is banned in HoldingsTable, and the reason is
+              structural: these rows are keyed on the immutable signature and the list is
+              chronological newest-first with no price-driven re-sort, so a row never remounts under
+              a poll. 8px of travel, not 14 — a dense text row needs less distance or the block
+              reads as sliding. The attribute mechanism, never useInView: these 20 rows already
+              re-render on a 15s clock, and the CSS costs zero renders. */}
+          {data.map((tx, i) => (
             <li
               key={tx.signature}
+              data-stagger
+              style={{ '--i': Math.min(i, 7) } as CSSProperties}
               className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-hairline/10 px-4 py-3 last:border-0"
             >
               <Pill tone={tx.err ? 'down' : 'up'}>{tx.err ? 'Failed' : 'Success'}</Pill>
@@ -72,6 +83,8 @@ export function TxHistory() {
               <span className="ml-auto whitespace-nowrap text-xs tabular-nums text-muted">
                 {tx.feeCook !== null ? `${formatAmount(tx.feeCook, 6)} ${COOK_SYMBOL}` : '—'}
               </span>
+              {/* Deliberately not faded. Twenty timestamps crossfading on a 15s clock is a strobe
+                  carrying no information — the string is telling you nothing changed. */}
               <span className="w-16 whitespace-nowrap text-right text-xs tabular-nums text-muted">
                 {now === null ? '—' : timeAgo(tx.blockTime, now)}
               </span>

@@ -3,7 +3,7 @@
 // Top gainers / losers / volume. Verified 5 Sep 2026: of 6470 registry tokens only 92 carry a USD
 // price and only 3 have any 24h movement, so these tiles are built to look right with 1-3 rows and
 // to say so plainly when there are none — never padded with flat rows to fill the space.
-import { useMemo, type ReactNode } from 'react';
+import { useMemo, type CSSProperties, type ReactNode } from 'react';
 import Link from 'next/link';
 import { ArrowUpRight, Flame, TrendingDown, TrendingUp, type LucideIcon } from 'lucide-react';
 import { rankableTokens, useRegistry } from '@/hooks/useMarketData';
@@ -14,9 +14,13 @@ import { Card, Change, EmptyState, Skeleton, TokenLogo } from '@/components/ui/p
 
 const ROWS = 5;
 
-function TokenRow({ token, metric }: { token: Token; metric: ReactNode }) {
+// The ROW gets an opacity-only stagger and nothing else — no translate, no logo scale, no chevron.
+// Three tiles of five rows with transforms would be fifteen moving elements inside three panels;
+// and moving a 40px row sideways while the user is comparing two prices down a tabular-nums column
+// is a straight legibility cost for no information.
+function TokenRow({ token, metric, index }: { token: Token; metric: ReactNode; index: number }) {
   return (
-    <li>
+    <li data-stagger="fade" style={{ '--i': index } as CSSProperties}>
       <Link
         href={`/trade?in=${COOK_MINT}&out=${token.mint}`}
         className="flex items-center gap-2.5 px-3 py-2 transition-colors hover:bg-surface2 sm:px-4"
@@ -68,6 +72,7 @@ function Tile({
   isLoading,
   isError,
   empty,
+  revealIndex,
 }: {
   title: string;
   icon: LucideIcon;
@@ -77,9 +82,21 @@ function Tile({
   isLoading: boolean;
   isError: boolean;
   empty: { title: string; hint: string };
+  /** Each Tile reveals on its own beat. Never the grid: at lg it is one wide short row with no
+   *  cascade possible, and at md/sm it is a ~700px block whose top arms while its last tile is
+   *  still a full screen below the fold. */
+  revealIndex: number;
 }) {
   return (
-    <Card as="section" className="flex flex-col overflow-hidden">
+    // Solid because it reveals — a transform on a backdrop-filtered panel re-blurs its whole
+    // backdrop every frame, and there are three of them side by side.
+    <Card
+      as="section"
+      variant="solid"
+      className="flex flex-col overflow-hidden"
+      reveal
+      revealIndex={revealIndex}
+    >
       <div className="flex items-center justify-between gap-2 border-b border-hairline/10 px-3 py-2.5 sm:px-4">
         <h2 className="flex items-center gap-1.5 text-[13px] font-bold">
           <Icon size={14} className={iconClass} aria-hidden="true" />
@@ -102,8 +119,10 @@ function Tile({
         <EmptyState title={empty.title} hint={empty.hint} />
       ) : (
         <ul className="divide-y divide-hairline/10">
-          {tokens.map((t) => (
-            <TokenRow key={t.mint} token={t} metric={metric(t)} />
+          {/* Keys stay `t.mint`. The 30s poll re-ranks these in place — instantly, with no FLIP and
+              no highlight — and a stable key is what stops the re-rank replaying the stagger. */}
+          {tokens.map((t, i) => (
+            <TokenRow key={t.mint} token={t} metric={metric(t)} index={i} />
           ))}
         </ul>
       )}
@@ -138,6 +157,7 @@ export function MoversTiles() {
     <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
       <Tile
         {...common}
+        revealIndex={0}
         title="Top gainers"
         icon={TrendingUp}
         iconClass="text-up"
@@ -150,6 +170,7 @@ export function MoversTiles() {
       />
       <Tile
         {...common}
+        revealIndex={1}
         title="Top losers"
         icon={TrendingDown}
         iconClass="text-down"
@@ -162,6 +183,7 @@ export function MoversTiles() {
       />
       <Tile
         {...common}
+        revealIndex={2}
         title="Top volume"
         icon={Flame}
         iconClass="text-accent"

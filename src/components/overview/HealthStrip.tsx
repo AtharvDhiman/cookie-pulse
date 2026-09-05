@@ -233,7 +233,10 @@ export function HealthStrip() {
       : data.status;
 
   return (
-    <Card as="section" className="overflow-hidden">
+    // Solid, not glass: this Card reveals, and transforming a backdrop-filtered surface re-blurs its
+    // whole backdrop every frame. The cells paint their own `bg-surface` anyway, so nothing visible
+    // changes here.
+    <Card as="section" variant="solid" className="overflow-hidden" reveal revealIndex={0}>
       <h2 className="sr-only">Cookie Chain health</h2>
 
       <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 border-b border-hairline/10 px-3 py-2.5 sm:px-4">
@@ -253,33 +256,37 @@ export function HealthStrip() {
         </div>
       </div>
 
+      {/* Three sibling slots, each independently conditional. This is the shape that matters: it
+          renders <Metrics> from ONE JSX position, so a failed 15s poll no longer moves it from the
+          `data ?` branch into the error branch's dimmed wrapper — which unmounted and remounted all
+          six cells, both sparklines and the epoch bar, and did it again on recovery. A `null` in the
+          slot above does not shift the slot below, so React reconciles the same element throughout.
+          Rendered output is byte-identical; only the reconciliation changed. */}
       {isError ? (
-        <>
-          <div className="flex flex-col items-start gap-3 px-3 py-6 sm:flex-row sm:items-center sm:px-4">
-            <AlertTriangle size={18} className="shrink-0 text-down" aria-hidden="true" />
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-semibold">Cookie Chain RPC is not responding.</p>
-              <p className="mt-0.5 break-words text-xs text-muted">
-                {error instanceof Error ? error.message : 'The batched health request failed.'}
-              </p>
-            </div>
-            <Button variant="secondary" onClick={() => void refetch()} loading={isFetching}>
-              <RotateCw size={14} aria-hidden="true" />
-              Retry
-            </Button>
+        <div className="flex flex-col items-start gap-3 px-3 py-6 sm:flex-row sm:items-center sm:px-4">
+          <AlertTriangle size={18} className="shrink-0 text-down" aria-hidden="true" />
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold">Cookie Chain RPC is not responding.</p>
+            <p className="mt-0.5 break-words text-xs text-muted">
+              {error instanceof Error ? error.message : 'The batched health request failed.'}
+            </p>
           </div>
-          {/* Dimmed so nobody reads a cached slot height as live. */}
-          {data ? (
-            <div className="opacity-45">
-              <Metrics data={data} />
-            </div>
-          ) : null}
-        </>
-      ) : data ? (
-        <Metrics data={data} />
-      ) : (
-        <MetricsSkeleton />
-      )}
+          <Button variant="secondary" onClick={() => void refetch()} loading={isFetching}>
+            <RotateCw size={14} aria-hidden="true" />
+            Retry
+          </Button>
+        </div>
+      ) : null}
+
+      {/* Dimmed so nobody reads a cached slot height as live. The crossfade is keyed to `isError` —
+          a CHANGED value — never to `isFetching`, which flips four times a minute forever. */}
+      {data ? (
+        <div className={cn('transition-opacity duration-300', stale && 'opacity-45')}>
+          <Metrics data={data} />
+        </div>
+      ) : null}
+
+      {!data && !isError ? <MetricsSkeleton /> : null}
     </Card>
   );
 }

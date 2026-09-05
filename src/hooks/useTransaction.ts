@@ -81,6 +81,11 @@ export function useTransaction() {
         toast.loading(`${label}: ${STATE_TEXT[next]}`, { id });
       };
 
+      // Held locally as well as in state: the catch block runs inside this same closure, so reading
+      // the state variable there would still see null and drop the explorer link on a confirm
+      // timeout — exactly the case where the user most needs it.
+      let sentSignature: string | null = null;
+
       try {
         step('building');
         const built = await build();
@@ -106,6 +111,7 @@ export function useTransaction() {
           skipPreflight: true,
           maxRetries: 3,
         });
+        sentSignature = sig;
         setSignature(sig);
 
         step('confirming');
@@ -134,17 +140,20 @@ export function useTransaction() {
         const friendly = toFriendlyError(e);
         setError(friendly);
         setState('failed');
-        // The signature exists whenever we got past send, so a confirm timeout still links out.
-        const sentSig = signature;
+        // A signature exists whenever we got past send, so a confirm timeout still links out —
+        // the transaction may yet land, and the user needs to check before retrying.
         toast.error(friendly.title, {
           id,
-          description: friendly.detail ?? undefined,
+          description: sentSignature
+            ? `${friendly.detail ? `${friendly.detail} · ` : ''}${shortAddr(sentSignature, 8, 8)}`
+            : (friendly.detail ?? undefined),
           duration: 12_000,
-          ...(sentSig
+          ...(sentSignature
             ? {
                 action: {
                   label: 'View on Cookiescan',
-                  onClick: () => window.open(explorerTx(sentSig), '_blank', 'noopener,noreferrer'),
+                  onClick: () =>
+                    window.open(explorerTx(sentSignature!), '_blank', 'noopener,noreferrer'),
                 },
               }
             : {}),
@@ -152,7 +161,7 @@ export function useTransaction() {
         return null;
       }
     },
-    [connection, publicKey, signTransaction, signature],
+    [connection, publicKey, signTransaction],
   );
 
   return { run, reset, state, pending, error, signature };

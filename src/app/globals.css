@@ -942,3 +942,113 @@ html.js .tp-panel {
     }
   }
 }
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════
+   ORBIT HERO
+   The one looping motion in the app beyond the status pulse and skeleton shimmer, and it is
+   allowed only because it stops: `data-spinning` is toggled by an IntersectionObserver, so
+   scrolling past it or backgrounding the tab silences it. Under reduced motion it never turns at
+   all — the diagram is the information, the rotation is not.
+   ══════════════════════════════════════════════════════════════════════════════════════════ */
+.orbit {
+  position: relative;
+  display: grid;
+  place-items: center;
+  aspect-ratio: 1;
+  width: 100%;
+  /* Capped on phones: at 30rem it is 480px of diagram pushing the dashboard below the fold on a
+     device where the dashboard is the reason anyone opened the app. */
+  max-width: 17rem;
+  margin-inline: auto;
+}
+
+@media (min-width: 640px) {
+  .orbit {
+    max-width: 21rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .orbit {
+    max-width: 24rem;
+  }
+}
+
+.orbit__svg {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.orbit__path {
+  fill: none;
+  stroke: rgb(var(--hairline) / 0.16);
+  stroke-width: 1;
+}
+
+.orbit__dot {
+  fill: rgb(var(--accent));
+}
+
+.orbit__halo {
+  fill: rgb(var(--accent-glow) / 0.18);
+}
+
+.orbit__core-ring {
+  fill: none;
+  stroke: rgb(var(--accent-2) / 0.55);
+  stroke-width: 1;
+}
+
+/* The readout sits over the core rather than inside the SVG: real text, selectable, themed, and it
+   reflows with the type scale instead of being baked into a viewBox. */
+.orbit__readout {
+  position: absolute;
+  display: grid;
+  justify-items: center;
+  gap: 0.1rem;
+  pointer-events: none;
+}
+
+.orbit__symbol {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgb(var(--accent-ink));
+}
+
+.orbit__price {
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: rgb(var(--accent-ink) / 0.85);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  /* Rotation is applied to the ring group, never to the core or the readout — a spinning price is
+     the one thing this must not do. `--dir` flips the outer rings so the system reads as depth
+     rather than as one rigid wheel. */
+  .orbit__svg[data-spinning] .orbit__ring {
+    transform-box: view-box;
+    transform-origin: 160px 160px;
+    animation: orbit-spin var(--dur, 48s) linear infinite;
+    animation-direction: var(--dir-name, normal);
+  }
+
+  .orbit__svg[data-spinning] .orbit__ring:nth-of-type(odd) {
+    animation-direction: reverse;
+  }
+
+  /* Counter-rotate each body by the same amount, so the dots orbit without themselves tumbling. */
+  .orbit__svg[data-spinning] .orbit__node {
+    transform-box: view-box;
+    transform-origin: 160px 160px;
+  }
+
+  @keyframes orbit-spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+}

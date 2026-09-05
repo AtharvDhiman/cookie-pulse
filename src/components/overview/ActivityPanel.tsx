@@ -8,7 +8,7 @@ import { ArrowUpRight } from 'lucide-react';
 import { useActivity, type ActivityRow } from '@/hooks/useActivity';
 import { explorerTx } from '@/lib/config';
 import { shortAddr, timeAgo } from '@/lib/format';
-import { Card, EmptyState, Pill, Skeleton } from '@/components/ui/primitives';
+import { Card, EmptyState, Pill, Skeleton, cn } from '@/components/ui/primitives';
 
 /**
  * Ticking clock for relative timestamps. Date.now() must never be read during render — the server
@@ -74,6 +74,10 @@ export function ActivityPanel() {
   const { data, isLoading, isError, error, isFetching } = useActivity();
   const now = useNow();
   const rows = data ?? [];
+  // React Query keeps the last good `data` when a refetch fails. At an 8s interval, letting
+  // `isError` win would blank 25 rows on one transient blip and restore them a tick later, so the
+  // cached list stays on screen and the header says we are reconnecting instead.
+  const stale = isError && rows.length > 0;
 
   return (
     <Card as="section" className="overflow-hidden">
@@ -81,17 +85,22 @@ export function ActivityPanel() {
         <div className="min-w-0">
           <h2 className="text-[13px] font-bold">Activity</h2>
           <p className="truncate text-[11px] text-muted">
-            Latest swaps across the Cookiebox, Cookieswap and MomoSwap programs
+            Latest transactions across the Cookiebox, Cookieswap and MomoSwap programs
           </p>
         </div>
-        <span className="whitespace-nowrap text-[11px] text-muted">
-          {isFetching ? 'Refreshing…' : 'Refreshes every 8s'}
+        <span
+          className={cn(
+            'whitespace-nowrap text-[11px]',
+            stale ? 'font-medium text-warn' : 'text-muted',
+          )}
+        >
+          {stale ? 'Reconnecting…' : isFetching ? 'Refreshing…' : 'Refreshes every 8s'}
         </span>
       </div>
 
       {isLoading ? (
         <RowsSkeleton />
-      ) : isError ? (
+      ) : isError && rows.length === 0 ? (
         <EmptyState
           title="Could not load activity"
           hint={

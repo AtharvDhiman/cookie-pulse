@@ -96,7 +96,10 @@ export function useQuote({
   return {
     quote: query.data ?? null,
     noRoute: enabled && query.isSuccess && query.data === null,
-    isQuoting: enabled && (settling || (query.isFetching && !query.data)),
+    // `settling` is deliberately outside the `enabled` gate: typing the first character of an
+    // empty field leaves the debounced value at '' for 400ms, so `enabled` is still false while a
+    // request is plainly imminent. Gating on it there would flash "no route" mid-keystroke.
+    isQuoting: settling || (enabled && query.isFetching && !query.data),
     isRefreshing: query.isFetching && Boolean(query.data),
     error: query.error,
     refetch: () => void query.refetch(),

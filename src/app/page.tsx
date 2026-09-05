@@ -86,7 +86,8 @@ function VenueBar({ share }: { share: number }) {
     <span className="block h-1 w-full overflow-hidden rounded-full bg-surface2" aria-hidden="true">
       <span
         className="block h-full rounded-full bg-accent/70"
-        style={{ width: `${Math.min(100, Math.max(2, share))}%` }}
+        // The 2% floor keeps a tiny-but-real share visible; a true zero draws nothing.
+        style={{ width: `${share > 0 ? Math.min(100, Math.max(2, share)) : 0}%` }}
       />
     </span>
   );
@@ -168,9 +169,8 @@ export default function OverviewPage() {
 
         <div className="grid gap-4 lg:grid-cols-3">
           <CookPriceCard />
-          <div className="lg:col-span-2">
-            <TvlCard />
-          </div>
+          {/* TvlCard declares its own lg:col-span-2, so it must be a direct grid child. */}
+          <TvlCard />
         </div>
 
         <MoversTiles />

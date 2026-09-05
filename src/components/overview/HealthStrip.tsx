@@ -150,8 +150,18 @@ function MetricsSkeleton() {
 export function HealthStrip() {
   const { data, isError, error, isFetching, refetch } = useChainHealth();
 
+  // A failed refetch leaves the previous snapshot in `data`. Showing the last known metrics greyed
+  // as "reconnecting" beats blanking all six every time one 15s poll misses — but the status pill
+  // still reads "down", because that IS the current truth about the RPC.
+  const stale = isError && Boolean(data);
   const status = isError ? 'down' : !data ? 'unknown' : data.status;
-  const statusLabel = isError ? 'RPC not responding' : !data ? 'Checking chain…' : data.status;
+  const statusLabel = isError
+    ? stale
+      ? 'RPC not responding — showing last known'
+      : 'RPC not responding'
+    : !data
+      ? 'Checking chain…'
+      : data.status;
 
   return (
     <Card as="section" className="overflow-hidden">
@@ -175,19 +185,27 @@ export function HealthStrip() {
       </div>
 
       {isError ? (
-        <div className="flex flex-col items-start gap-3 px-3 py-6 sm:flex-row sm:items-center sm:px-4">
-          <AlertTriangle size={18} className="shrink-0 text-down" aria-hidden="true" />
-          <div className="min-w-0 flex-1">
-            <p className="text-sm font-semibold">Cookie Chain RPC is not responding.</p>
-            <p className="mt-0.5 break-words text-xs text-muted">
-              {error instanceof Error ? error.message : 'The batched health request failed.'}
-            </p>
+        <>
+          <div className="flex flex-col items-start gap-3 px-3 py-6 sm:flex-row sm:items-center sm:px-4">
+            <AlertTriangle size={18} className="shrink-0 text-down" aria-hidden="true" />
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold">Cookie Chain RPC is not responding.</p>
+              <p className="mt-0.5 break-words text-xs text-muted">
+                {error instanceof Error ? error.message : 'The batched health request failed.'}
+              </p>
+            </div>
+            <Button variant="secondary" onClick={() => void refetch()} loading={isFetching}>
+              <RotateCw size={14} aria-hidden="true" />
+              Retry
+            </Button>
           </div>
-          <Button variant="secondary" onClick={() => void refetch()} loading={isFetching}>
-            <RotateCw size={14} aria-hidden="true" />
-            Retry
-          </Button>
-        </div>
+          {/* Dimmed so nobody reads a cached slot height as live. */}
+          {data ? (
+            <div className="opacity-45">
+              <Metrics data={data} />
+            </div>
+          ) : null}
+        </>
       ) : data ? (
         <Metrics data={data} />
       ) : (

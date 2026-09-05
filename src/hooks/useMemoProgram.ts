@@ -21,7 +21,9 @@ export function useMemoProgram(): boolean {
     queryFn: async ({ signal }) => {
       const res = await rpcCall<AccountInfoResult | null>(
         'getAccountInfo',
-        [MEMO_PROGRAM_ID, { encoding: 'base64' }],
+        // dataSlice 0 => header only. Without it the RPC ships the whole BPF ELF just to prove
+        // the account exists.
+        [MEMO_PROGRAM_ID, { encoding: 'base64', dataSlice: { offset: 0, length: 0 } }],
         signal,
       );
       return res?.value !== null && res?.value !== undefined;

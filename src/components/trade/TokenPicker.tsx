@@ -7,6 +7,7 @@
 //     back to the initials avatar rather than pretending every token has market data.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
+import { createPortal } from 'react-dom';
 import { ChevronDown, Search, X } from 'lucide-react';
 import { COOK_MINT } from '@/lib/config';
 import { formatAmount, formatUsd, shortAddr } from '@/lib/format';
@@ -160,7 +161,10 @@ export function TokenPicker({ label, token, tokens, balances, loading, disabled,
         <ChevronDown size={14} className="text-muted" aria-hidden="true" />
       </button>
 
-      {open ? (
+      {/* Portalled to <body>: the swap Card is a `.glass` panel, and a non-none backdrop-filter
+          makes that card the containing block for fixed descendants — rendered in place, the
+          overlay would size itself to the card instead of the viewport. */}
+      {open ? createPortal(
         <div
           className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 sm:items-center sm:p-4"
           onMouseDown={close}
@@ -271,7 +275,8 @@ export function TokenPicker({ label, token, tokens, balances, loading, disabled,
               <span className="hidden sm:inline"> · ↑↓ to move, Enter to select</span>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       ) : null}
     </>
   );

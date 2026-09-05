@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ChevronLeft, ChevronRight, Search, X } from 'lucide-react';
 import { useRegistry } from '@/hooks/useMarketData';
 import { formatUsd } from '@/lib/format';
+import type { Token } from '@/lib/types';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/primitives';
 import {
@@ -19,6 +20,15 @@ import {
 
 const PAGE_SIZE = 50;
 const SEARCH_DEBOUNCE_MS = 200;
+
+/** One predicate for both the visible list and the "hidden by the filter" count under it. */
+function matches(t: Token, q: string): boolean {
+  return (
+    t.symbol.toLowerCase().includes(q) ||
+    t.name.toLowerCase().includes(q) ||
+    t.mint.toLowerCase().includes(q)
+  );
+}
 
 export default function ScreenerPage() {
   const { tokens, cookUsd, isLoading, isError } = useRegistry();
@@ -55,12 +65,7 @@ export default function ScreenerPage() {
       : tokens.filter((t) => t.priceUsd !== null && t.priceUsd > 0);
     const q = query.trim().toLowerCase();
     if (!q) return base;
-    return base.filter(
-      (t) =>
-        t.symbol.toLowerCase().includes(q) ||
-        t.name.toLowerCase().includes(q) ||
-        t.mint.toLowerCase().includes(q),
-    );
+    return base.filter((t) => matches(t, q));
   }, [tokens, showUnpriced, query]);
 
   const sorted = useMemo(() => sortTokens(filtered, sort), [filtered, sort]);
@@ -76,16 +81,36 @@ export default function ScreenerPage() {
   );
 
   const searching = query.trim().length > 0;
+
+  // The default filter drops 6378 of 6470 tokens, so an empty search result almost always means
+  // "hidden", not "does not exist" — saying otherwise would be a lie. Only counted once the visible
+  // result is already empty, so every match counted here is one the price filter removed.
+  const hiddenMatches = useMemo(() => {
+    if (showUnpriced || !searching || sorted.length > 0) return 0;
+    const q = query.trim().toLowerCase();
+    return tokens.reduce((n, t) => (matches(t, q) ? n + 1 : n), 0);
+  }, [tokens, showUnpriced, searching, sorted, query]);
+
   const emptyTitle = isError
     ? 'Could not load the token registry'
-    : searching
-      ? `No token matches “${query.trim()}”`
-      : 'No priced tokens right now';
+    : hiddenMatches > 0
+      ? `Only unpriced tokens match “${query.trim()}”`
+      : searching
+        ? `No token matches “${query.trim()}”`
+        : showUnpriced
+          ? 'The registry came back empty'
+          : 'No priced tokens right now';
   const emptyHint = isError
     ? 'Cookiescan did not answer. The page retries on its own — or reload in a moment.'
-    : searching
-      ? 'Search matches symbol, name and mint address.'
-      : 'Tick “Show unpriced” to list every token in the registry.';
+    : hiddenMatches > 0
+      ? `${hiddenMatches.toLocaleString('en-US')} unpriced ${
+          hiddenMatches === 1 ? 'token is' : 'tokens are'
+        } hidden — tick “Show unpriced” to include them.`
+      : searching
+        ? 'Search matches symbol, name and mint address.'
+        : showUnpriced
+          ? 'Cookiescan listed no tokens. The page retries on its own.'
+          : 'Tick “Show unpriced” to list every token in the registry.';
 
   return (
     <div className="py-2">

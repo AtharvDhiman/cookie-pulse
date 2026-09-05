@@ -23,6 +23,7 @@ import {
 import { formatAmount, formatUsd, fromRawAmount, toRawAmount } from '@/lib/format';
 import type { FriendlyError } from '@/lib/errors';
 import { rankableTokens, useRegistry } from '@/hooks/useMarketData';
+import type { TokenBalance } from '@/lib/types';
 import { useCookBalance, useRefreshBalances, useTokenBalances } from '@/hooks/useBalances';
 import { useTransaction } from '@/hooks/useTransaction';
 import { useQuote } from '@/hooks/useQuote';
@@ -168,8 +169,8 @@ export function SwapPanel({
   const { tokens, byMint, isLoading: registryLoading, isError: registryError } = useRegistry();
   const { publicKey } = useWallet();
   const { setVisible } = useWalletModal();
-  const { data: cookBalance } = useCookBalance();
-  const { data: tokenBalances } = useTokenBalances();
+  const { data: cookBalance, isLoading: cookLoading } = useCookBalance();
+  const { data: tokenBalances, isLoading: tokensLoading } = useTokenBalances();
   const refreshBalances = useRefreshBalances();
   const tx = useTransaction();
 
@@ -206,12 +207,17 @@ export function SwapPanel({
 
   const balances = useMemo(() => {
     const m = new Map<string, number>();
-    for (const b of tokenBalances ?? []) m.set(b.mint, b.amount);
+    // A wallet can hold more than one account for the same mint, so these are summed rather than
+    // last-wins — otherwise the displayed balance and MAX could disagree about the same token.
+    for (const b of tokenBalances ?? []) m.set(b.mint, (m.get(b.mint) ?? 0) + b.amount);
     // Native COOK wins over any wrapped account carrying the same mint.
     if (typeof cookBalance === 'number') m.set(COOK_MINT, cookBalance);
     return m;
   }, [tokenBalances, cookBalance]);
 
+  // An in-flight balance query is "unknown", not zero — see `exceedsBalance`, which must not
+  // claim the wallet is short while the RPC is still answering.
+  const balancesLoading = connected && (cookLoading || tokensLoading);
   const inputBalance = inputToken ? (balances.get(inputToken.mint) ?? 0) : 0;
   const outputBalance = outputToken ? (balances.get(outputToken.mint) ?? 0) : 0;
   // COOK pays the fee for this very transaction, so the last 0.001 is never spendable.
@@ -221,7 +227,11 @@ export function SwapPanel({
   const maxAmountText = useMemo(() => {
     if (!inputToken) return '';
     if (inputToken.mint !== COOK_MINT) {
-      const account = (tokenBalances ?? []).find((b) => b.mint === inputToken.mint);
+      // The largest account, chosen deterministically — `find` would take an arbitrary one when
+      // the wallet holds several for this mint.
+      const account = (tokenBalances ?? [])
+        .filter((b) => b.mint === inputToken.mint)
+        .reduce<TokenBalance | null>((best, b) => (!best || b.amount > best.amount ? b : best), null);
       // Exact when the account agrees with the registry; otherwise fall back to the float path.
       if (account && account.decimals === inputToken.decimals) {
         return rawToDecimalString(account.rawAmount, account.decimals);
@@ -236,7 +246,11 @@ export function SwapPanel({
   const tooPrecise = typed && inputToken !== null && rawAmount === null;
   const amountNum = Number(amount);
   const exceedsBalance =
-    connected && hasAmount && Number.isFinite(amountNum) && amountNum > spendable + 1e-12;
+    connected &&
+    !balancesLoading &&
+    hasAmount &&
+    Number.isFinite(amountNum) &&
+    amountNum > spendable + 1e-12;
   const samePair = inputMint !== null && inputMint === outputMint;
 
   const { quote, noRoute, isQuoting, isRefreshing, error: quoteError, refetch } = useQuote({
@@ -274,6 +288,9 @@ export function SwapPanel({
   }
 
   function flip() {
+    // Before the registry resolves, one side can still be null. Swapping then leaves the resolve
+    // effect to backfill COOK into both sides, which deadlocks the quote at input === output.
+    if (!inputMint || !outputMint) return;
     setInputMint(outputMint);
     setOutputMint(inputMint);
   }
@@ -364,7 +381,8 @@ export function SwapPanel({
             {connected && inputToken ? (
               <div className="flex items-center gap-1.5 text-[11px] text-muted">
                 <span className="tabular-nums">
-                  Balance {formatAmount(inputBalance, 4)} {inputToken.symbol}
+                  Balance {balancesLoading ? '—' : formatAmount(inputBalance, 4)}{' '}
+                  {inputToken.symbol}
                 </span>
                 <button
                   type="button"
@@ -427,7 +445,8 @@ export function SwapPanel({
             </span>
             {connected && outputToken ? (
               <span className="text-[11px] tabular-nums text-muted">
-                Balance {formatAmount(outputBalance, 4)} {outputToken.symbol}
+                Balance {balancesLoading ? '—' : formatAmount(outputBalance, 4)}{' '}
+                {outputToken.symbol}
               </span>
             ) : null}
           </div>
@@ -443,9 +462,13 @@ export function SwapPanel({
                     outAmount !== null ? 'text-ink' : 'text-muted',
                   )}
                 >
+                  {/* Unknown is not zero: once an amount is typed and no quote came back, this
+                      renders a dash rather than a confident 0.00. */}
                   {outAmount !== null && outputToken
                     ? formatAmount(outAmount, Math.min(outputToken.decimals, 6))
-                    : '0.00'}
+                    : amount.trim() !== ''
+                      ? '—'
+                      : '0.00'}
                 </output>
               )}
             </div>

@@ -296,7 +296,7 @@ export function ScreenerTable({ rows, sort, onSort, isLoading, emptyTitle, empty
                 </td>
                 <td className="text-right">
                   <span className={cn('tabular-nums', t.holderCount ? 'text-ink2' : 'text-muted')}>
-                    {Number.isFinite(t.holderCount) ? t.holderCount.toLocaleString('en-US') : '—'}
+                    {t.holderCount.toLocaleString('en-US')}
                   </span>
                 </td>
 

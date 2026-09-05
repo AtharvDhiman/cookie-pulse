@@ -94,6 +94,9 @@ export default function PortfolioPage() {
   // Null rather than $0.00 when nothing on the books has a price at all.
   const totalUsd =
     cookValueUsd === null && tokenValueUsd === 0 ? null : (cookValueUsd ?? 0) + tokenValueUsd;
+  // Holding COOK the registry cannot price means the total is real but incomplete. Say so, rather
+  // than presenting a confident figure that quietly omits the largest position.
+  const totalExcludesCook = cookValueUsd === null && (cookAmount ?? 0) > 0 && totalUsd !== null;
   const pricedCount = (balances ?? []).filter((b) => b.valueUsd !== null).length;
   // A failed RPC read is "unknown", not zero — the stats and the holdings list must both say so.
   const balancesError = cookQuery.isError || tokensQuery.isError;
@@ -129,7 +132,12 @@ export default function PortfolioPage() {
       </header>
 
       <Card as="section" className="grid grid-cols-1 divide-y divide-hairline/10 sm:grid-cols-3 sm:divide-x sm:divide-y-0">
-        <Stat label="Total value" value={formatUsd(totalUsd)} loading={loading} />
+        <Stat
+          label="Total value"
+          value={formatUsd(totalUsd)}
+          sub={totalExcludesCook ? `excludes ${COOK_SYMBOL} — no price feed` : undefined}
+          loading={loading}
+        />
         <Stat
           label={`${COOK_SYMBOL} balance`}
           value={cookAmount === null ? '—' : `${formatAmount(cookAmount, COOK_DECIMALS)} ${COOK_SYMBOL}`}

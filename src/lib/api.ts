@@ -53,6 +53,10 @@ export async function postSwapTx(params: {
   return (await res.json()) as SwapTxResponse;
 }
 
-/** Best-effort: DAS is not guaranteed to index every wallet, so callers treat failure as "no NFTs". */
+/**
+ * Best-effort: DAS is not guaranteed to index every wallet, so callers treat failure as "no NFTs".
+ * `total` is the wallet's full asset count; `nfts` is capped at the route's page size (50), so the
+ * two differ for large wallets and the UI must not report `nfts.length` as the holding.
+ */
 export const getNfts = (owner: string, signal?: AbortSignal) =>
-  getJson<{ nfts: WalletNft[] }>(`/api/das?owner=${encodeURIComponent(owner)}`, signal);
+  getJson<{ nfts: WalletNft[]; total: number }>(`/api/das?owner=${encodeURIComponent(owner)}`, signal);

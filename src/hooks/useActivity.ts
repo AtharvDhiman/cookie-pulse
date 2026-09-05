@@ -13,7 +13,6 @@ export interface ActivityRow {
   /** Human venue label, resolved from the batch id rather than re-scanning the tx. */
   venue: string;
   blockTime: number | null;
-  slot: number | null;
   err: boolean;
 }
 
@@ -48,7 +47,6 @@ export async function fetchActivity(signal?: AbortSignal): Promise<ActivityRow[]
         signature,
         venue: program.label,
         blockTime: num(pick(item, ['blockTime'])),
-        slot: num(pick(item, ['slot'])),
         // `err` is null on success and an object describing the failure otherwise.
         err: pick(item, ['err']) != null,
       });

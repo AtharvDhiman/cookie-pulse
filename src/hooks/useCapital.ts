@@ -10,6 +10,7 @@ import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   BRIDGE_COLLATERAL_PDA,
+  COOK_MINT,
   STAKE_POOL_ACCOUNT,
   STAKE_POOL_RESERVE,
 } from '@/lib/config';
@@ -27,11 +28,6 @@ import { useMarkets, useRegistry } from './useMarketData';
 const STAKE_POOL_TAG = 1;
 const STAKE_POOL_MIN_LEN = 274;
 const OFFSET_TOTAL_LAMPORTS = 258;
-
-export interface StakePoolState {
-  totalLamports: number;
-  reserveLamports: number | null;
-}
 
 /**
  * Decodes the stake pool, or returns null. Deliberately strict: a bucket that renders as zero when
@@ -109,12 +105,17 @@ export function useCapital(): { snapshot: CapitalSnapshot | null; isLoading: boo
     const validatorLamports = health?.activatedStakeLamports ?? null;
     const dexTvlUsd = markets?.tvlUsd ?? null;
 
-    // The DEX bucket is the only one denominated in USD upstream, so it is converted INTO COOK for
-    // the bar — and the card names that conversion rather than quietly mixing units.
-    const dexLamports =
-      dexTvlUsd !== null && cookUsd !== null && cookUsd > 0
-        ? (dexTvlUsd / cookUsd) * 1e9
-        : null;
+    // The COOK actually sitting in DEX pools, summed from the COOK side of every market — NOT the
+    // pool TVL converted at the COOK price. A pool holds two sides, so converting its whole USD TVL
+    // into COOK would roughly double the real figure and put a number in the supply column that no
+    // one ever deposited. The USD TVL is still shown, as its own column.
+    const dexLamports = markets
+      ? markets.markets.reduce((sum, m) => {
+          const side =
+            m.base.mint === COOK_MINT ? m.base : m.quote.mint === COOK_MINT ? m.quote : null;
+          return sum + (side?.amount ?? 0) * 1e9;
+        }, 0)
+      : null;
 
     const reserveText =
       reserveLamports !== null
@@ -144,7 +145,7 @@ export function useCapital(): { snapshot: CapitalSnapshot | null; isLoading: boo
       {
         key: 'dex',
         label: 'DEX pools',
-        detail: 'Markets feed TVL, converted at the registry COOK price',
+        detail: 'Markets feed · the COOK side of every pool, summed',
         lamports: dexLamports,
       },
     ];

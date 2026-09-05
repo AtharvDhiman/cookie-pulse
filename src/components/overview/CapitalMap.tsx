@@ -228,12 +228,12 @@ export function CapitalMap({
             </>
           )}
           {anyUnavailable ? ' One or more sources did not respond; those rows are omitted, not zeroed.' : ''}
-          {dexTvlUsd !== null && cookUsd !== null && cookUsd > 0 ? (
+          {dexTvlUsd !== null ? (
             <>
               {' '}
-              DEX pool value is the markets feed&apos;s USD TVL ({formatUsd(dexTvlUsd)}), converted
-              at the registry&apos;s {COOK_SYMBOL} price for comparison — the other rows are native{' '}
-              {COOK_SYMBOL} read from chain.
+              Every row is native {COOK_SYMBOL}, valued at the registry&apos;s {COOK_SYMBOL} price.
+              The DEX row counts only the {COOK_SYMBOL} side of each pool, so it is smaller than the
+              markets feed&apos;s headline TVL of {formatUsd(dexTvlUsd)}, which values both sides.
             </>
           ) : null}
         </p>

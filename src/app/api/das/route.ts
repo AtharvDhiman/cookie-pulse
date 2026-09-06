@@ -3,6 +3,7 @@
 import { PublicKey } from '@solana/web3.js';
 import { serverConfig } from '@/lib/config';
 import { CACHE_HEADERS, errorResponse, fetchJson } from '@/lib/http';
+import { normalizeLogo } from '@/lib/cookiescan';
 import { pick, str } from '@/lib/normalize';
 import type { WalletNft } from '@/lib/types';
 
@@ -48,16 +49,22 @@ async function fetchAssets(owner: string): Promise<unknown[]> {
   return items;
 }
 
-/** DAS puts the display image under `content.links.image`, sometimes only in `content.files[]`. */
+/**
+ * DAS puts the display image under `content.links.image`, sometimes only in `content.files[]`.
+ *
+ * Every URL here is off-chain and arbitrary, and NFT metadata leans on IPFS even harder than the
+ * token registry does — so the same dead-gateway rewrite applies, or /portfolio's NFT grid shows
+ * empty tiles for the same invisible reason the screener showed letter badges.
+ */
 function imageOf(asset: unknown): string | null {
-  const link = str(pick(asset, ['content', 'links', 'image']));
+  const link = normalizeLogo(str(pick(asset, ['content', 'links', 'image'])));
   if (link) return link;
   const files = pick(asset, ['content', 'files']);
   if (Array.isArray(files)) {
     for (const f of files) {
       const uri = str(pick(f, ['cdn_uri'])) ?? str(pick(f, ['uri']));
       const mime = str(pick(f, ['mime'])) ?? '';
-      if (uri && (mime.startsWith('image/') || mime === '')) return uri;
+      if (uri && (mime.startsWith('image/') || mime === '')) return normalizeLogo(uri);
     }
   }
   return null;

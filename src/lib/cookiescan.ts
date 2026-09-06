@@ -6,6 +6,42 @@ import { fetchJson } from './http';
 import { isNftLike, num, num0, str, unwrap, pick } from './normalize';
 import type { Market, MarketsSnapshot, RegistryView, Token, TokenRegistry } from './types';
 
+/**
+ * Repoint token logos away from IPFS gateways that do not answer.
+ *
+ * 56 of the 70 registry logos are `https://ipfs.io/ipfs/<cid>`, and ipfs.io does not serve them:
+ * measured in a real browser, 0 of 3 sample CIDs loaded, and the connection hangs rather than
+ * refusing. dweb.link and cloudflare-ipfs.com behave the same way. That is why most of the screener
+ * showed letter badges instead of pictures — TokenLogo's onError fallback was doing its job on a
+ * dead URL, so nothing looked broken and nothing was reported.
+ *
+ * Pinata answered 3 of 3 for the same CIDs, in 4-6s cold. Slow, but the images are lazy-loaded and
+ * the badge covers the gap, so a slow logo costs nothing and a dead one costs the picture.
+ *
+ * Only the hosts measured as dead are rewritten, and only when the path is a real `/ipfs/<cid>`:
+ * a working host is left exactly as it is, because swapping a gateway that works for one that is
+ * merely known-good elsewhere is a downgrade. `ipfs://` is also handled — a browser cannot load
+ * that scheme at all.
+ */
+const DEAD_IPFS_HOSTS = new Set(['ipfs.io', 'dweb.link', 'cloudflare-ipfs.com', 'ipfs.infura.io']);
+const IPFS_GATEWAY = 'https://gateway.pinata.cloud/ipfs/';
+
+export function normalizeLogo(raw: string | null): string | null {
+  if (!raw) return null;
+  const url = raw.trim();
+  if (!url) return null;
+
+  // `ipfs://<cid>` and `ipfs://ipfs/<cid>` — no browser resolves either.
+  const scheme = /^ipfs:\/\/(?:ipfs\/)?(.+)$/i.exec(url);
+  if (scheme) return IPFS_GATEWAY + scheme[1];
+
+  const gateway = /^https?:\/\/([^/]+)\/ipfs\/(.+)$/i.exec(url);
+  if (gateway && DEAD_IPFS_HOSTS.has(gateway[1].toLowerCase())) {
+    return IPFS_GATEWAY + gateway[2];
+  }
+  return url;
+}
+
 function toToken(raw: unknown): Token | null {
   const mint = str(pick(raw, ['mint']));
   if (!mint) return null;
@@ -24,7 +60,7 @@ function toToken(raw: unknown): Token | null {
     mint,
     name: str(pick(raw, ['metadata', 'name'])) ?? 'Unknown token',
     symbol: str(pick(raw, ['metadata', 'symbol'])) ?? mint.slice(0, 4),
-    logo: str(pick(raw, ['metadata', 'logo'])),
+    logo: normalizeLogo(str(pick(raw, ['metadata', 'logo']))),
     // A wrong decimals value would misprice every amount, so only fall back when it is out of range.
     decimals: decimals !== null && decimals >= 0 && decimals <= 18 ? decimals : 9,
     description: str(pick(raw, ['metadata', 'description'])),

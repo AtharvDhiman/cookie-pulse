@@ -33,14 +33,29 @@ const VB_H = 200;
 /** Height a zero bucket still draws. The "we measured nothing" tick. */
 const ZERO_TICK = 3;
 const BAR_FILL = 0.66;
-/** Horizontal gridlines, as a fraction of the peak. */
-const GRID = [0, 0.25, 0.5, 0.75, 1];
-
-function niceCeil(n: number): number {
-  if (n <= 0) return 1;
-  const mag = Math.pow(10, Math.floor(Math.log10(n)));
-  const step = [1, 2, 2.5, 5, 10].find((s) => n <= s * mag) ?? 10;
-  return step * mag;
+/**
+ * Gridline values for a series of integer counts.
+ *
+ * The first version drew five lines at fixed fractions (0/.25/.5/.75/1) of a "nice" peak and
+ * labelled them `Math.round(peak * g)`. Those are not the same numbers: at peak 5 the lines sit at
+ * 0/1.25/2.5/3.75/5 but were labelled 0/1/3/4/5, so four of the five labels named a value their
+ * line was not drawn at. On a chart whose whole point is that the reader can check it, that is
+ * worse than having no axis.
+ *
+ * So the STEP is chosen first and the lines are placed on it. Every label is then exactly the
+ * value of the line beside it, by construction, and the step is forced to a whole number because
+ * a quarter of a transaction is not a thing that can happen.
+ */
+function axisFor(max: number): { peak: number; ticks: number[] } {
+  if (!Number.isFinite(max) || max <= 0) return { peak: 1, ticks: [0, 1] };
+  const rough = max / 4;
+  const mag = Math.pow(10, Math.floor(Math.log10(Math.max(rough, 1))));
+  const step = Math.max(1, ([1, 2, 2.5, 5, 10].find((s) => rough <= s * mag) ?? 10) * mag);
+  // Round the top up to a whole number of steps so the last tick lands exactly on the peak.
+  const peak = Math.ceil(max / step) * step;
+  const ticks: number[] = [];
+  for (let v = 0; v <= peak + 1e-9; v += step) ticks.push(Math.round(v));
+  return { peak, ticks };
 }
 
 export function ActivityChart({ perf }: { perf: PerfWindow }) {
@@ -50,11 +65,11 @@ export function ActivityChart({ perf }: { perf: PerfWindow }) {
   const values = perf.nonVotePerMinute;
   const n = values.length;
 
-  const { peak, colWidth, barWidth } = useMemo(() => {
-    const max = Math.max(...values, 0);
+  const { peak, ticks, colWidth, barWidth } = useMemo(() => {
+    const { peak: p, ticks: t } = axisFor(Math.max(...values, 0));
     return {
-      // Rounded up to a readable number so the axis labels are 0/2/4, never 0/1.75/3.5.
-      peak: niceCeil(max),
+      peak: p,
+      ticks: t,
       colWidth: VB_W / Math.max(n, 1),
       barWidth: Math.max((VB_W / Math.max(n, 1)) * BAR_FILL, 1),
     };
@@ -107,8 +122,8 @@ export function ActivityChart({ perf }: { perf: PerfWindow }) {
           className="flex w-8 shrink-0 flex-col justify-between py-px text-right font-mono text-[9px] tabular-nums leading-none text-muted"
           aria-hidden="true"
         >
-          {[...GRID].reverse().map((g) => (
-            <span key={g}>{Math.round(peak * g)}</span>
+          {[...ticks].reverse().map((v) => (
+            <span key={v}>{v}</span>
           ))}
         </div>
 
@@ -125,13 +140,13 @@ export function ActivityChart({ perf }: { perf: PerfWindow }) {
             onPointerLeave={() => setHover(null)}
           >
             {/* Graticule. Drawn first, under everything. */}
-            {GRID.map((g) => (
+            {ticks.map((v) => (
               <line
-                key={g}
+                key={v}
                 x1={0}
                 x2={VB_W}
-                y1={VB_H - g * VB_H}
-                y2={VB_H - g * VB_H}
+                y1={VB_H - (v / peak) * VB_H}
+                y2={VB_H - (v / peak) * VB_H}
                 stroke="rgb(var(--hairline) / 0.12)"
                 strokeWidth={1}
                 vectorEffect="non-scaling-stroke"

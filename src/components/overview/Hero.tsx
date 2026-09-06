@@ -29,7 +29,7 @@ import { COOK_SYMBOL } from "@/lib/config";
 import { compact, formatUsd } from "@/lib/format";
 import { CountUp } from "@/components/motion/CountUp";
 import { ActivityChart } from "./ActivityChart";
-import { LABEL_MUTED, cn, Skeleton, StatusDot } from '@/components/ui/primitives';
+import { LABEL, LABEL_MUTED, cn, Skeleton, StatusDot } from '@/components/ui/primitives';
 
 // Module-scoped, as useCountUp requires: an inline arrow is a fresh prop identity on every render,
 // which defeats the memo and restarts the roll every time a poll re-renders this tree.
@@ -80,7 +80,11 @@ export function Hero() {
         style={step(0)}
         className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-hairline/20 bg-surface2/60 px-3 py-2 sm:px-4"
       >
-        <span className={cn(LABEL_MUTED, "flex items-center gap-2 text-ink2")}>
+        {/* LABEL, not LABEL_MUTED: LABEL_MUTED carries `text-muted`, and Tailwind resolves
+            conflicting utilities by their order in the compiled sheet rather than in the class
+            string -- so appending `text-ink2` here silently lost. This is the exact hazard
+            LABEL's own comment warns about. */}
+        <span className={cn(LABEL, "flex items-center gap-2 text-ink2")}>
           <StatusDot status={health?.status ?? "unknown"} />
           Cookie Chain mainnet
         </span>

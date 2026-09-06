@@ -717,6 +717,15 @@ export function SwapPanel({
                     'block animate-fade-in truncate text-2xl font-semibold tabular-nums',
                     outAmount !== null ? 'text-ink' : 'text-muted',
                   )}
+                  // Still compacted on screen: this column measures 193px at 1280 and 136px at
+                  // 375, and the exact figure would simply ellipsize, which is worse than a
+                  // rounded one. The precise value is carried here, and "Minimum received" below
+                  // -- the number that is actually enforced -- is exact.
+                  title={
+                    outAmount !== null && outputToken
+                      ? `${formatAmount(outAmount, Math.min(outputToken.decimals, 6), { compact: false })} ${outputToken.symbol}`
+                      : undefined
+                  }
                 >
                   {/* Unknown is not zero: once an amount is typed and no quote came back, this
                       renders a dash rather than a confident 0.00. */}
@@ -811,8 +820,10 @@ export function SwapPanel({
                   label={`Minimum received (${slippageLabel(slippageBps)})`}
                   hint="The swap reverts on-chain if it would deliver less than this."
                 >
+                  {/* Exact, never compacted: this is the floor the swap reverts below, so
+                      "1.98M" would understate a guarantee by thousands of tokens. */}
                   {minOut !== null
-                    ? `${formatAmount(minOut, Math.min(outputToken.decimals, 6))} ${outputToken.symbol}`
+                    ? `${formatAmount(minOut, Math.min(outputToken.decimals, 6), { compact: false })} ${outputToken.symbol}`
                     : '—'}
                 </DetailRow>
                 <DetailRow label="Aggregator fee">

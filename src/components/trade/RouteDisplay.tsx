@@ -153,8 +153,10 @@ export function describeRouteCheck(
   check: Exclude<RouteCheck, { kind: 'unavailable' }>,
   out: OutputUnit,
 ): string {
+  // Exact: this sentence explains why a swap was refused by naming the two amounts, and a
+  // compacted pair can render as the same string on both sides of "became".
   const amount = (raw: string) =>
-    `${formatAmount(fromRawAmount(raw, out.decimals), Math.min(out.decimals, 6))} ${out.symbol}`;
+    `${formatAmount(fromRawAmount(raw, out.decimals), Math.min(out.decimals, 6), { compact: false })} ${out.symbol}`;
   const venues = (f: RouteFacts) =>
     f.venues.length > 0 ? f.venues.map(prettyVenue).join(' + ') : 'an unnamed venue';
   const slip = slippageLabel(check.slippageBps);

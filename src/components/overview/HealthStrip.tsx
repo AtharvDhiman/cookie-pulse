@@ -249,9 +249,9 @@ export function HealthStrip() {
       <CardHeader
         icon={<StatusDot status={status} />}
         title={statusLabel}
-        // Only when the title is the feed's own lowercase status word. When it is a sentence
-        // ("RPC not responding — showing last known"), capitalize title-cased every word in it.
-        titleClassName={data && !isError ? 'capitalize' : undefined}
+        // No titleClassName: CardHeader uppercases every title, so `capitalize` was overridden
+        // and had no effect. The sentence-case problem it was written for cannot occur any more.
+        
         subtitle="Cookie Chain mainnet"
         meta={
           <>

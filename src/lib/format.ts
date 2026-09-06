@@ -26,17 +26,33 @@ function trimZeros(s: string): string {
 export function compact(v: number | null | undefined): string {
   if (v === null || v === undefined || !Number.isFinite(v)) return '—';
   const abs = Math.abs(v);
-  if (abs >= 1e9) return `${(v / 1e9).toFixed(2)}B`;
-  if (abs >= 1e6) return `${(v / 1e6).toFixed(2)}M`;
-  if (abs >= 1e3) return `${(v / 1e3).toFixed(2)}K`;
+  // Thresholds are the value at which the NEXT unit down would round up to 1000.00, not the unit
+  // boundary itself. Branching on the raw magnitude meant 999,999,738 COOK -- this chain's actual
+  // supply -- was below 1e9, fell to the M branch, and printed "1000.00M". The comparison uses the
+  // absolute value and the division uses the signed one, so negatives still render correctly.
+  if (abs >= 999.995e6) return `${(v / 1e9).toFixed(2)}B`;
+  if (abs >= 999.995e3) return `${(v / 1e6).toFixed(2)}M`;
+  if (abs >= 999.995) return `${(v / 1e3).toFixed(2)}K`;
   return v.toFixed(2);
 }
 
-export function formatAmount(v: number | null | undefined, decimals = 6): string {
+/**
+ * `opts.compact: false` keeps full precision above 1e6.
+ *
+ * The default compacts, which is right for a balance chip and wrong for a number the chain
+ * enforces: "Minimum received" is the floor below which the swap reverts, and rendering
+ * 1,980,054.14802 as "1.98M" understates the guarantee by thousands of tokens. Opt-out rather than
+ * opt-in so every existing call site keeps its current behaviour.
+ */
+export function formatAmount(
+  v: number | null | undefined,
+  decimals = 6,
+  opts?: { compact?: boolean },
+): string {
   if (v === null || v === undefined || !Number.isFinite(v)) return '—';
   if (v === 0) return '0';
   const abs = Math.abs(v);
-  if (abs >= 1e6) return compact(v);
+  if (abs >= 1e6 && opts?.compact !== false) return compact(v);
   if (abs >= 1) return v.toLocaleString('en-US', { maximumFractionDigits: Math.min(decimals, 6) });
   return v.toFixed(Math.min(decimals, 9)).replace(/0+$/, '').replace(/\.$/, '');
 }

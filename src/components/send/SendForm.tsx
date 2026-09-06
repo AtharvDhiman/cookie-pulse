@@ -494,7 +494,7 @@ export function SendForm() {
     }).compileToV0Message();
 
     return { transaction: new VersionedTransaction(message), blockhash, lastValidBlockHeight };
-  }, [amountRaw, asset, connection, memo, memoAvailable, publicKey, recipientPk]);
+  }, [amountRaw, asset, connection, memo, memoAvailable, publicKey, recipientPk, recipientUnusable]);
 
   const amountRef = useRef<HTMLInputElement>(null);
 

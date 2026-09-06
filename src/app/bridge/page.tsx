@@ -134,7 +134,7 @@ export default function BridgePage() {
           them would make the header read as two events. */}
       <header className="mb-6" data-enter="" style={{ '--i': 0 } as CSSProperties}>
         <h1 className="font-mono text-[22px] font-bold uppercase leading-tight tracking-[-0.02em] sm:text-[28px]">
-          How to get <span className="accent-text accent-sweep">COOK</span>
+          How to get <span className="accent-text">COOK</span>
         </h1>
         <p className="mt-2 max-w-prose text-sm text-ink2">
           Cookie Chain is mainnet-only — there is no faucet and no devnet, so every transaction

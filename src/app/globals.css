@@ -144,8 +144,8 @@
   /* Text amber: 4.68:1 on --ground, so the wordmark, the headline's second line and all 32
      text-accent usages clear AA. It is deliberately duller than the brand amber, because that is
      what legibility on white costs. */
-  --accent: 160 92 0;
-  --accent-2: 174 104 6;
+  --accent: 152 86 0;
+  --accent-2: 166 98 4;
   /* Fill amber: vivid, because a filled shape only owes 3:1 and this is what makes the button and
      the scope core look like amber instead of like rust. Paired with a DARK ink below, it
      measures 5.94:1 — better than the white-on-brown it replaces, and far better looking. */
@@ -955,25 +955,15 @@ html.js .tp-panel {
      the repeat is seamless, and its resting window (position 0 across a 200% size) is the same
      accent -> accent-2 ramp as the header wordmark, so the settled state is identical to plain
      .accent-text. Higher specificity than the layered .accent-text it overrides. */
-  html.js .accent-sweep {
-    background-image: linear-gradient(
-      100deg,
-      rgb(var(--accent)) 0%,
-      rgb(var(--accent-2)) 50%,
-      rgb(var(--accent)) 100%
-    );
-    background-size: 200% 100%;
-    background-position: 0 0;
-    animation: accent-sweep var(--dur-draw) var(--ease-lead) both;
-  }
-  @keyframes accent-sweep {
-    from {
-      background-position: 120% 0;
-    }
-    to {
-      background-position: 0 0;
-    }
-  }
+  /* `.accent-sweep` lived here: an animated gradient BACKGROUND that swept across /bridge's h1.
+     It only ever worked because the old `.accent-text` was gradient-clipped text — transparent
+     letterforms that the moving background showed through. The terminal redesign made
+     `.accent-text` a flat colour, so the sweep started painting a solid amber block with amber
+     letters on top of it: the word "COOK" in that heading was invisible.
+
+     Removed rather than converted. Clipping it back to the text would reintroduce gradient text,
+     which this design dropped on purpose — it cannot be made to pass contrast on a light ground,
+     because the ink IS the gradient. The h1 still enters on the [data-enter] ladder. */
 
   /* /bridge's ordinal badges. Preflight strips the native <ol> marker, so this badge IS the list
      ordinal — the one beat on that route carrying meaning rather than decoration. It lands 80ms

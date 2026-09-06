@@ -27,7 +27,12 @@ const csp = [
   // 'unsafe-eval' in DEVELOPMENT ONLY: `next dev` runs webpack with devtool 'eval-source-map',
   // which wraps every client module in eval(). headers() applies in dev too, so omitting this
   // makes `npm run dev` render a blank page. It is never sent in production.
-  `script-src 'self' 'unsafe-inline'${dev ? " 'unsafe-eval'" : ''}`,
+  // `chrome-extension:` / `moz-extension:` are required for browser wallets. Nightly registers
+  // itself through a script injected into the page's MAIN world, and a script-src without an
+  // extension allowance can block that registration outright — so the wallet either never appears
+  // or appears and cannot connect. This is standard for a dApp and costs nothing: an extension is
+  // installed by the user and already has far more privilege than the page.
+  `script-src 'self' 'unsafe-inline' chrome-extension: moz-extension:${dev ? " 'unsafe-eval'" : ''}`,
 
   // sonner builds its stylesheet with createElement('style') at import time and the reveal system
   // ships style="--i:N" attributes, so inline styles are unavoidable. No third-party origin is:
@@ -42,7 +47,8 @@ const csp = [
   // breaking the screener.
   "img-src 'self' data: https:",
 
-  `connect-src 'self' ${RPC} ${WS}`,
+  // Same reason: a wallet adapter may talk to its extension over an extension-scheme URL.
+  `connect-src 'self' ${RPC} ${WS} chrome-extension: moz-extension:`,
   'upgrade-insecure-requests',
 ].join('; ');
 
@@ -73,9 +79,11 @@ const nextConfig = {
             key: 'Permissions-Policy',
             value: 'camera=(), microphone=(), geolocation=(), payment=(), browsing-topics=()',
           },
-          // allow-popups rather than plain same-origin: a Wallet Standard web wallet talks to its
-          // popup through window.opener, which strict COOP severs.
-          { key: 'Cross-Origin-Opener-Policy', value: 'same-origin-allow-popups' },
+          // COOP is deliberately NOT set. `same-origin-allow-popups` looks safe for a wallet
+          // popup, but it still severs `window.opener` for cross-origin openers, and a wallet
+          // connect that silently does nothing is a far worse outcome here than the narrow
+          // cross-origin isolation this header buys on a page that embeds nothing. Revisit only
+          // with a real wallet connect to test against.
         ],
       },
     ];

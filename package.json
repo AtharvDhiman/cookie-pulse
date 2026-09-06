@@ -17,7 +17,8 @@
     "check:health": "tsx scripts/health.check.ts",
     "test:safety": "tsx scripts/safety.test.ts",
     "shots": "tsx scripts/shots.ts",
-    "verify-tx": "tsx scripts/verify-tx.ts"
+    "verify-tx": "tsx scripts/verify-tx.ts",
+    "audit:visual": "node scripts/visual-audit.mjs"
   },
   "dependencies": {
     "@solana/spl-token": "^0.4.9",

@@ -84,9 +84,12 @@ export function useScreenerRegistry(showAll: boolean) {
  * truncated address labelled "Unlisted token". Only the mints actually missing are requested, so a
  * wallet holding nothing unusual issues no request at all.
  *
- * Returns a map that already includes the priced view, so callers can use it as their only lookup.
+ * Returns a map that already includes the priced view, so callers can use it as their only lookup,
+ * plus whether the lookup has settled — which callers must not infer from a mint's absence.
  */
-export function useTokenDirectory(mints: string[]): Map<string, Token> {
+export function useTokenDirectory(
+  mints: string[],
+): { directory: Map<string, Token>; resolved: boolean } {
   const { byMint } = useRegistry();
 
   // Sorted and joined so the query key is stable across re-renders that reorder the same holdings.
@@ -99,20 +102,34 @@ export function useTokenDirectory(mints: string[]): Map<string, Token> {
   const query = useQuery({
     queryKey: ['token-directory', missing.join(',')],
     enabled: missing.length > 0,
-    queryFn: ({ signal }) => getTokensByMint(missing, signal),
+    // Chunked: /api/tokens rejects more than 200 mints with a 400, and a wallet holding NFTs
+    // (4,855 of the 6,476 registry entries are single editions) trivially exceeds that -- so the
+    // whole directory lookup failed and every holding rendered as an unlisted token.
+    queryFn: async ({ signal }) => {
+      const CHUNK = 100;
+      const groups: string[][] = [];
+      for (let i = 0; i < missing.length; i += CHUNK) groups.push(missing.slice(i, i + CHUNK));
+      const pages = await Promise.all(groups.map((g) => getTokensByMint(g, signal)));
+      return { tokens: pages.flatMap((p) => p.tokens) } as Awaited<ReturnType<typeof getTokensByMint>>;
+    },
     // Names and logos do not move; this is identity, not market data.
     staleTime: 10 * 60_000,
     gcTime: 30 * 60_000,
     retry: 1,
   });
 
-  return useMemo(() => {
+  const directory = useMemo(() => {
     const resolved = query.data?.tokens;
     if (!resolved || resolved.length === 0) return byMint;
     const merged = new Map(byMint);
     for (const t of resolved) merged.set(t.mint, displayToken(t));
     return merged;
   }, [byMint, query.data]);
+
+  // Whether the lookup has ANSWERED, which is not the same as whether it found anything. Callers
+  // were inferring "still loading" from a mint's absence, so a mint the registry simply does not
+  // carry looked permanently in-flight.
+  return { directory, resolved: missing.length === 0 || query.isFetched };
 }
 
 export function useMarkets() {

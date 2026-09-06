@@ -16,6 +16,10 @@ function toToken(raw: unknown): Token | null {
   // not a measurement. Surfaced as null so the UI renders a dash instead of a fabricated +0.00%.
   // `volume24h` gets no such treatment: 0 there genuinely means no trades.
   const change = num(pick(raw, ['price', 'change24h']));
+  const usd = num(pick(raw, ['price', 'usd']));
+  const native = num(pick(raw, ['price', 'native']));
+  const supply = num0(pick(raw, ['marketData', 'supply']));
+  const indexed = supply > 0;
   return {
     mint,
     name: str(pick(raw, ['metadata', 'name'])) ?? 'Unknown token',
@@ -25,13 +29,21 @@ function toToken(raw: unknown): Token | null {
     decimals: decimals !== null && decimals >= 0 && decimals <= 18 ? decimals : 9,
     description: str(pick(raw, ['metadata', 'description'])),
     // `price.usd` arrives as a string for ~1% of the registry — `num` coerces both forms.
-    priceUsd: num(pick(raw, ['price', 'usd'])),
-    priceNative: num(pick(raw, ['price', 'native'])),
+    //
+    // A price of exactly 0 is the indexer's "not priced", not a measurement: the registry's own
+    // `isPriced` filter is `> 0`. Passing the 0 through made an unpriced token's USD line render a
+    // confident "$0.00" on /trade instead of nothing.
+    priceUsd: usd !== null && usd > 0 ? usd : null,
+    priceNative: native !== null && native > 0 ? native : null,
     change24h: change === 0 ? null : change,
-    volume24h: num0(pick(raw, ['marketData', 'volume24h'])),
-    liquidityUsd: num0(pick(raw, ['marketData', 'liquidity'])),
-    marketCap: num0(pick(raw, ['marketData', 'marketCap'])),
-    supply: num0(pick(raw, ['marketData', 'supply'])),
+    // The same sentinel, one level up. When the indexer has not populated a token's block at all
+    // it returns an all-zero marketData, and `num0` turned that into three measured-looking zeros
+    // — so COOK's own screener row claimed $0.00 liquidity and $0.00 market cap while the overview
+    // above it reported $7.88K of TVL. `supply > 0` is the tell that the block was populated.
+    volume24h: indexed ? num0(pick(raw, ['marketData', 'volume24h'])) : null,
+    liquidityUsd: indexed ? num0(pick(raw, ['marketData', 'liquidity'])) : null,
+    marketCap: indexed ? num0(pick(raw, ['marketData', 'marketCap'])) : null,
+    supply,
     holderCount: num0(pick(raw, ['marketData', 'holderCount'])),
     // Placeholder: the real figure needs every row, so `withSymbolCounts` fills it below.
     symbolCount: 0,

@@ -29,10 +29,13 @@ const csp = [
   // makes `npm run dev` render a blank page. It is never sent in production.
   `script-src 'self' 'unsafe-inline'${dev ? " 'unsafe-eval'" : ''}`,
 
-  // sonner builds its stylesheet with createElement('style') at import time, the reveal system
-  // ships style="--i:N" attributes, and wallet-adapter-react-ui's stylesheet @imports Google Fonts.
-  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-  "font-src 'self' https://fonts.gstatic.com",
+  // sonner builds its stylesheet with createElement('style') at import time and the reveal system
+  // ships style="--i:N" attributes, so inline styles are unavoidable. No third-party origin is:
+  // wallet-adapter-react-ui's stylesheet is vendored with its Google Fonts @import removed, and
+  // next/font self-hosts. Measured on /trade: 0 requests to fonts.googleapis.com or
+  // fonts.gstatic.com, and rpc.cookiescan.io is the only external origin the app touches at all.
+  "style-src 'self' 'unsafe-inline'",
+  "font-src 'self'",
 
   // Token logos and NFT art are arbitrary off-chain URLs from a third-party registry; the wallet
   // adapter's own icons are data: URIs. This is the one directive that cannot be narrowed without

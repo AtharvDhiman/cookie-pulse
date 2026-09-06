@@ -243,7 +243,9 @@ export function SwapPanel({
   // Only 3 tokens have any 24h volume (NOTES.md), so this reliably lands on the one live pair.
   const defaultOutMint = useMemo(() => {
     const ranked = [...rankableTokens(tokens)].sort(
-      (a, b) => b.volume24h - a.volume24h || b.liquidityUsd - a.liquidityUsd,
+      (a, b) =>
+        (b.volume24h ?? 0) - (a.volume24h ?? 0) ||
+        (b.liquidityUsd ?? 0) - (a.liquidityUsd ?? 0),
     );
     return ranked[0]?.mint ?? null;
   }, [tokens]);
@@ -256,7 +258,7 @@ export function SwapPanel({
     () => [initialInMint, initialOutMint].filter((m): m is string => Boolean(m)),
     [initialInMint, initialOutMint],
   );
-  const directory = useTokenDirectory(linkedMints);
+  const { directory, resolved: directoryResolved } = useTokenDirectory(linkedMints);
 
   // Resolve the pair once the registry lands. A mint neither the registry nor the directory knows
   // has no decimals and cannot be quoted, so it still falls back — but now it says so.
@@ -264,14 +266,17 @@ export function SwapPanel({
   const [unresolvedMint, setUnresolvedMint] = useState<string | null>(null);
   useEffect(() => {
     if (!registryReady) return;
-    // Wait for an in-flight lookup before judging a linked mint unknown.
-    const pendingLookup = linkedMints.some((m) => !directory.has(m));
+    // "The lookup has not answered yet", NOT "the mint is absent". Reading absence as pending
+     // meant a mint the registry does not carry stayed pending forever: the fallback to COOK /
+     // defaultOutMint never fired, the panel sat empty, and the warning written for exactly this
+     // case could never render because it is gated on the same flag.
+    const pendingLookup = linkedMints.length > 0 && !directoryResolved;
     setInputMint((cur) => (cur && directory.has(cur) ? cur : pendingLookup ? cur : COOK_MINT));
     setOutputMint((cur) => (cur && directory.has(cur) ? cur : pendingLookup ? cur : defaultOutMint));
     setUnresolvedMint(
       pendingLookup ? null : (linkedMints.find((m) => !directory.has(m)) ?? null),
     );
-  }, [registryReady, directory, defaultOutMint, linkedMints]);
+  }, [registryReady, directory, directoryResolved, defaultOutMint, linkedMints]);
 
   const inputToken = inputMint ? (directory.get(inputMint) ?? null) : null;
   const outputToken = outputMint ? (directory.get(outputMint) ?? null) : null;
@@ -408,7 +413,9 @@ export function SwapPanel({
   const [lastCheck, setLastCheck] = useState<{ quote: Quote; check: RouteCheck } | null>(null);
   const routeCheck = lastCheck && lastCheck.quote === quote ? lastCheck.check : null;
 
-  const { audit } = useMintAudit();
+  // Audits the mints actually on screen, not only the 92 priced ones — a deep-linked token was
+  // otherwise shown with no safety facts at all, which reads as "nothing to report".
+  const { audit } = useMintAudit(linkedMints);
   const { data: marketsSnapshot } = useMarkets();
 
   /** Pools per mint, from the markets cache — evidence for "which token wearing this symbol is used". */

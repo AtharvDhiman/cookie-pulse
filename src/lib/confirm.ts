@@ -221,6 +221,8 @@ export async function resolveConfirmation(
 
   let last: Verdict = { kind: 'unknown', reason: UNKNOWN_REASON.notIndexedYet };
   let neverSeenStreak = 0;
+  /** `last` is a between-ticks holding message, not an answer this run can end on. */
+  let provisional = false;
 
   for (;;) {
     const verdict = await pollOnce(sent);
@@ -232,11 +234,18 @@ export async function resolveConfirmation(
       neverSeenStreak += 1;
       if (neverSeenStreak >= NEVER_SEEN_CONFIRMATIONS) return verdict;
       // Not yet corroborated — hold the softer sentence and look again next tick.
+      //
+      // But `last` is also what is RETURNED when the loop breaks, and this sentence promises a
+      // re-check ("re-checking before saying so") that will then never happen. So it is held only
+      // for display between ticks; if this turns out to be the final reading, the honest terminal
+      // answer is that the app could not tell, which is what `notIndexedYet` says.
       last = { kind: 'unknown', reason: UNKNOWN_REASON.awaitingCorroboration };
+      provisional = true;
     } else {
       // Any other reading breaks the streak: the rounds must be consecutive to count.
       neverSeenStreak = 0;
       last = verdict;
+      provisional = false;
     }
 
     const now = Date.now();
@@ -258,6 +267,9 @@ export async function resolveConfirmation(
 
   // Out of time. A confirming backstop is still an answer, just without a slot of its own.
   if (backstopState.confirmed) return landedWithoutSlot(sent);
+  // Never end on the provisional sentence: it tells the user a re-check is coming, and nothing
+  // will re-check.
+  if (provisional) return { kind: 'unknown', reason: UNKNOWN_REASON.notIndexedYet };
   return last;
 }
 

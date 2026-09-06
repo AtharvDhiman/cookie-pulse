@@ -202,20 +202,20 @@ function MetricsSkeleton() {
         ))}
       </dl>
 
-      {/* The two sparkline cells. Heights match the real markup exactly: label 2.5, the 34px
-          chart, then the caption. */}
-      <div className="grid gap-px border-t border-hairline/10 bg-rule sm:grid-cols-2">
-        {[0, 1].map((i) => (
-          <div key={i} className={CELL}>
-            <Skeleton className="h-2.5 w-40" />
-            <div className="mt-1.5">
-              <Skeleton className="h-[34px] w-full" />
-            </div>
-            <div className="mt-1">
-              <Skeleton className="h-2.5 w-52" />
-            </div>
+      {/* ONE cell, mirroring `Metrics`. The non-vote series moved to the masthead chart, and this
+          skeleton was still reserving two -- so under 640px it reserved ~80px more than the loaded
+          strip occupies and the landing screen jumped on every cold load. Heights match the real
+          markup exactly: label 2.5, the 34px chart, then the caption. */}
+      <div className="grid gap-px border-t border-hairline/10 bg-rule">
+        <div className={CELL}>
+          <Skeleton className="h-2.5 w-40" />
+          <div className="mt-1.5">
+            <Skeleton className="h-[34px] w-full" />
           </div>
-        ))}
+          <div className="mt-1">
+            <Skeleton className="h-2.5 w-52" />
+          </div>
+        </div>
       </div>
     </>
   );

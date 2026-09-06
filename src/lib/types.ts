@@ -11,10 +11,11 @@ export interface Token {
   priceUsd: number | null;
   priceNative: number | null;
   change24h: number | null;
-  volume24h: number;
+  /** null = the indexer has not populated this token's block. Never collapsed to a measured 0. */
+  volume24h: number | null;
   /** USD. Verified 4 Sep 2026 against the markets feed — see NOTES.md. */
-  liquidityUsd: number;
-  marketCap: number;
+  liquidityUsd: number | null;
+  marketCap: number | null;
   supply: number;
   holderCount: number;
   /**

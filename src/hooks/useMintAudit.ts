@@ -56,13 +56,26 @@ async function fetchMintAudit(mints: string[], signal?: AbortSignal): Promise<Mi
  * the chain agree, which is what makes the rest of the app's numbers trustworthy. When they disagree
  * the chain wins and the disagreement is reported, never quietly resolved.
  */
-export function useMintAudit() {
+export function useMintAudit(extraMints: string[] = []) {
   const { tokens } = useRegistry();
 
-  const mints = useMemo(() => tokens.map((t) => t.mint).sort(), [tokens]);
+  // The priced projection is 92 of 6,476 registry mints, so a token reached by deep link is
+  // usually outside it and had NO safety facts at all -- silently, which reads as "nothing to
+  // report" rather than "not checked". `chunkMints` already batches 100 per getMultipleAccounts,
+  // so carrying the one or two mints actually on screen costs no extra request.
+  const extraKey = extraMints.join(',');
+  const mints = useMemo(
+    () => [...new Set([...tokens.map((t) => t.mint), ...extraKey.split(',').filter(Boolean)])].sort(),
+    [tokens, extraKey],
+  );
 
   const query = useQuery({
-    queryKey: ['mint-audit', mints.length],
+    // Keyed on the identities, not the cardinality. `mints.length` did not say WHICH mints, and
+    // with staleTime/gcTime Infinity the first result for a 92-element set was reused for every
+    // later 92-element set for the life of the tab -- so a token that entered the priced set
+    // showed another token's authorities. The array is sorted above precisely so this key is
+    // stable across re-renders that reorder the same set.
+    queryKey: ['mint-audit', mints.join(',')],
     enabled: mints.length > 0,
     queryFn: ({ signal }) => fetchMintAudit(mints, signal),
     staleTime: Infinity,

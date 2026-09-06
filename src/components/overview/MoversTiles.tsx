@@ -145,8 +145,8 @@ export function MoversTiles() {
         .sort((a, b) => (a.change24h ?? 0) - (b.change24h ?? 0))
         .slice(0, ROWS),
       byVolume: ranked
-        .filter((t) => t.volume24h > 0)
-        .sort((a, b) => b.volume24h - a.volume24h)
+        .filter((t) => (t.volume24h ?? 0) > 0)
+        .sort((a, b) => (b.volume24h ?? 0) - (a.volume24h ?? 0))
         .slice(0, ROWS),
     };
   }, [tokens]);

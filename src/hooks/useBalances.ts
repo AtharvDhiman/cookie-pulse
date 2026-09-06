@@ -89,7 +89,7 @@ export function useTokenBalances() {
   // a holding with no price still has a name and a logo, and rendering it as a truncated address
   // was the regression the projection introduced on the first page a connected user sees.
   const mints = useMemo(() => (raw.data ?? []).map((b) => b.mint), [raw.data]);
-  const directory = useTokenDirectory(mints);
+  const { directory } = useTokenDirectory(mints);
 
   // Joined here rather than in `queryFn`, so a registry refresh or a late-arriving directory
   // reprices and relabels the table without re-hitting the RPC or reflashing the skeletons.

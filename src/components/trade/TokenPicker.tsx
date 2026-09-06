@@ -69,8 +69,10 @@ export function TokenPicker({ label, token, tokens, balances, loading, disabled,
       const heldA = (balances.get(a.t.mint) ?? 0) > 0 ? 0 : 1;
       const heldB = (balances.get(b.t.mint) ?? 0) > 0 ? 0 : 1;
       if (heldA !== heldB) return heldA - heldB;
-      if (b.t.liquidityUsd !== a.t.liquidityUsd) return b.t.liquidityUsd - a.t.liquidityUsd;
-      return b.t.volume24h - a.t.volume24h;
+      const liqA = a.t.liquidityUsd ?? 0;
+      const liqB = b.t.liquidityUsd ?? 0;
+      if (liqB !== liqA) return liqB - liqA;
+      return (b.t.volume24h ?? 0) - (a.t.volume24h ?? 0);
     });
 
     const cook = tokens.find((t) => t.mint === COOK_MINT);

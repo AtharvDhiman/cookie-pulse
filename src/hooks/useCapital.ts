@@ -142,9 +142,16 @@ export function useCapital(): {
       },
       {
         key: 'validators',
-        label: 'Activated with validators',
-        detail: 'getVoteAccounts · stake actually delegated and voting',
-        lamports: validatorLamports,
+        // The stake pool's own delegated lamports are inside getVoteAccounts' total AND inside the
+        // stake pool's total_lamports, so adding both counted them twice and overstated the
+        // accounted-for share. Netting the pool's delegated portion (total - reserve) out leaves
+        // this row meaning what its label says: stake delegated by everyone ELSE.
+        label: 'Activated with validators, excluding the stake pool',
+        detail: 'getVoteAccounts minus the stake pool\'s own delegated lamports',
+        lamports:
+          validatorLamports !== null && stakePoolLamports !== null && reserveLamports !== null
+            ? Math.max(validatorLamports - (stakePoolLamports - reserveLamports), 0)
+            : validatorLamports,
       },
       {
         key: 'dex',

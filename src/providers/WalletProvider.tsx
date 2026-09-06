@@ -9,7 +9,8 @@ import { WalletModalProvider } from '@solana/wallet-adapter-react-ui';
 import { NightlyWalletAdapter } from '@solana/wallet-adapter-nightly';
 import { RPC_URL, WS_URL } from '@/lib/config';
 
-import '@solana/wallet-adapter-react-ui/styles.css';
+// Vendored, not the package's own stylesheet: that one @imports Google Fonts at parse time.
+import '@/styles/wallet-adapter.css';
 
 export function CookieWalletProvider({ children }: { children: ReactNode }) {
   const wallets = useMemo(() => [new NightlyWalletAdapter()], []);

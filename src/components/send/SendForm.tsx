@@ -251,8 +251,12 @@ export function SendForm() {
   const { publicKey } = useWallet();
   const { setVisible } = useWalletModal();
   const { byMint } = useRegistry();
-  const { data: cookBalance, isLoading: cookLoading } = useCookBalance();
-  const { data: tokenBalances, isLoading: tokensLoading } = useTokenBalances();
+  const { data: cookBalance, isLoading: cookLoading, isError: cookError } = useCookBalance();
+  const {
+    data: tokenBalances,
+    isLoading: tokensLoading,
+    isError: tokensError,
+  } = useTokenBalances();
   const memoAvailable = useMemoProgram();
   const refreshBalances = useRefreshBalances();
   const tx = useTransaction();
@@ -263,6 +267,16 @@ export function SendForm() {
   const [memo, setMemo] = useState('');
 
   const balancesLoading = Boolean(publicKey) && (cookLoading || tokensLoading);
+  /**
+   * The balance read FAILED, which is not the same as a balance of zero.
+   *
+   * With no error surface, a settled-in-error query left `data` undefined and `isLoading` false,
+   * so the form fell back to a zero balance: every amount then exceeded it, the sufficiency check
+   * reported "Not enough", and the send button stayed disabled with no explanation. The user is
+   * told the read failed instead, and the sufficiency check stands down rather than asserting a
+   * shortfall it cannot know about.
+   */
+  const balanceUnavailable = Boolean(publicKey) && !balancesLoading && (cookError || tokensError);
 
   const assets = useMemo<Asset[]>(() => {
     const cookToken = byMint.get(COOK_MINT) ?? null;
@@ -380,11 +394,21 @@ export function SendForm() {
     }
     if (amountRaw === null) return 'Enter a valid amount.';
     if (safeBigInt(amountRaw) === 0n) return 'Enter an amount above zero.';
-    if (safeBigInt(amountRaw) > asset.rawBalance) {
+    // Skipped when the balance could not be read: `rawBalance` is 0 by fallback there, and a
+    // shortfall derived from an unknown balance is a claim, not a check.
+    if (!balanceUnavailable && safeBigInt(amountRaw) > asset.rawBalance) {
       return `More than your ${asset.symbol} balance.`;
     }
     return null;
-  }, [amountRaw, asset.decimals, asset.rawBalance, asset.symbol, fracDigits, trimmedAmount]);
+  }, [
+    amountRaw,
+    asset.decimals,
+    asset.rawBalance,
+    asset.symbol,
+    balanceUnavailable,
+    fracDigits,
+    trimmedAmount,
+  ]);
 
   const maxRaw =
     asset.kind === 'native'
@@ -408,7 +432,13 @@ export function SendForm() {
   // Readiness reads the parsed key, never the debounced note: what is displayed may lag by 350ms,
   // what is signed never does.
   const ready = Boolean(
-    publicKey && recipientPk && amountRaw && !amountError && recipientChecked && !recipientUnusable,
+    publicKey &&
+      recipientPk &&
+      amountRaw &&
+      !amountError &&
+      recipientChecked &&
+      !recipientUnusable &&
+      !balanceUnavailable,
   );
 
   const build = useCallback(async (): Promise<BuiltTx> => {
@@ -572,6 +602,12 @@ export function SendForm() {
       <Card className="enter-fade space-y-4 p-4 sm:p-5">
         <div data-enter style={{ '--i': 0 } as React.CSSProperties}>
           <p className={cn('mb-1.5', LABEL_MUTED)}>Asset</p>
+          {balanceUnavailable ? (
+            <FieldNote tone="error">
+              Your balances could not be read, so this form cannot tell what you hold. It retries
+              automatically — nothing has been sent.
+            </FieldNote>
+          ) : null}
           {balancesLoading ? (
             <Skeleton className="h-[54px] w-full" />
           ) : (

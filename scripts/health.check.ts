@@ -4,8 +4,8 @@
  *
  *   npx tsx scripts/health.check.ts
  *
- * Asserts the shape and the invariants, never specific counts — this chain moves, and _RISKS.md is
- * explicit that criteria are "the app reports what the chain currently says", not fixed numbers.
+ * Asserts the shape and the invariants, never specific counts. This chain moves, so the criterion
+ * is "the app reports what the chain currently says", never a number frozen at the time of writing.
  */
 import { HEALTH_CALLS, PERF_SAMPLE_MINUTES, deriveChainHealth, derivePerfWindow } from '../src/lib/rpc';
 import type { RpcRes } from '../src/lib/rpc';

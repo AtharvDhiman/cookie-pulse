@@ -908,7 +908,7 @@ html.js .tp-panel {
   }
 }
 
-/* 6. OPTIONAL — your call, but an acceptance criterion depends on it. _CONTRACT.md's REDUCED
+/* 6. OPTIONAL — your call, but an acceptance criterion depends on it. The REDUCED
    MOTION criterion says "the /trade ImpactValue still fades grey → amber → red", and the blanket
    reset at the bottom of globals.css currently zeroes it along with everything else
    (`transition-duration: 0.01ms !important` applies to colour too). If you want that criterion to

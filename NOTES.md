@@ -218,16 +218,15 @@ Implementation notes:
 
 ## Motion system
 
-The full design lives in `docs/handoff/motion/`. Two decisions there are worth restating here,
-because both look like mistakes until you know why.
+Two decisions in it look like mistakes until you know why, so both are stated here.
 
-### Zero new dependencies, deviating from the written contract
+### Zero new dependencies
 
-`docs/handoff/motion/_CONTRACT.md` specifies `framer-motion@13.2.0`, scoped behind `next/dynamic` so
-it loads only when the trade token picker opens. `docs/handoff/HANDOFF.md` overrides that: the
-shipped decision is **no new dependencies at all**. Everything is CSS plus three small hooks
-(`useReveal`, `useScrollShell`, `useCountUp`). The override wins because it is the later decision and
-because the library was buying one modal transition.
+The motion work was originally specified against `framer-motion@13.2.0`, scoped behind
+`next/dynamic` so it would load only when the trade token picker opened. The shipped decision is
+**no new dependencies at all**: everything is CSS plus three small hooks (`useReveal`,
+`useScrollShell`, `useCountUp`). A 40KB animation library buying exactly one modal transition is a
+bad trade, and every effect it would have carried turned out to be expressible in CSS.
 
 Consequence: `grep -rn "framer-motion" src/` returns nothing, and every route's first-load JS is
 unchanged by the motion layer.

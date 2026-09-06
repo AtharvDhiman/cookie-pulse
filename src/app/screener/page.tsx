@@ -6,8 +6,8 @@
 //
 // Motion note: every moving part on this route lives in the FRAME — the page-enter ladder, the
 // filter bar's stuck shadow, the sort/page sweep, the sort chevron and the two per-row links. The
-// table itself is inert by contract: no reveal, no stagger, no transform on any <tr>/<td>, and no
-// flash on a poll. See docs/handoff/motion/_CONTRACT.md.
+// table itself is inert by design: no reveal, no stagger, no transform on any <tr>/<td>, and no
+// flash on a poll. A row that moves while you are reading it is worse than a row that does not.
 import {
   useCallback,
   useEffect,

@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from 'next';
-import { Inter, Sora, JetBrains_Mono } from 'next/font/google';
+import { Inter, JetBrains_Mono } from 'next/font/google';
 import { Toaster } from 'sonner';
 import { CookieWalletProvider } from '@/providers/WalletProvider';
 import { QueryProvider } from '@/providers/QueryProvider';
@@ -11,17 +11,22 @@ import { GateScript } from '@/components/motion/GateScript';
 import './globals.css';
 
 // Self-hosted by next/font, so there is no render-blocking request to fonts.googleapis.com and no
-// layout shift. Sora carries the display headings, Inter the UI, JetBrains Mono the addresses.
+// layout shift. Inter carries prose; JetBrains Mono carries everything else.
+//
+// The terminal redesign made mono the display face for essentially all chrome — every h1, card
+// title, LABEL, Pill, Button and nav link — but the family was still being loaded at 400/500 only.
+// Roughly 30 elements per route asked for 600, 700 or 800 and got a browser-synthesised smear
+// instead of a real cut. These are the weights the design actually uses; Google's JetBrains Mono
+// axis tops out at 800, so 800 is the highest that can be requested here.
+//
+// Sora is gone. It was the old display face and, after the redesign, rendered on exactly zero
+// elements — its @font-face declarations were dead weight in the CSS.
 const sans = Inter({ subsets: ['latin'], variable: '--font-sans', display: 'swap' });
-const display = Sora({
-  subsets: ['latin'],
-  weight: ['600', '700', '800'],
-  variable: '--font-display',
-  display: 'swap',
-});
 const mono = JetBrains_Mono({
   subsets: ['latin'],
-  weight: ['400', '500'],
+  weight: ['400', '500', '600', '700', '800'],
+  // Serves BOTH custom properties: tailwind.config.ts aliases `display` to the mono stack, and
+  // pointing --font-display here keeps any remaining `font-display` class resolving to a real face.
   variable: '--font-mono',
   display: 'swap',
 });
@@ -64,7 +69,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html
       lang="en"
       suppressHydrationWarning
-      className={`${sans.variable} ${display.variable} ${mono.variable}`}
+      className={`${sans.variable} ${mono.variable}`}
     >
       {/* `isolate` gives the ambient layer a stacking context to sit behind without escaping. */}
       <body className="isolate flex min-h-screen flex-col bg-ground text-ink antialiased">

@@ -227,6 +227,52 @@ async function main(): Promise<void> {
     globalThis.fetch = original;
   }
 
+  // -- Regression: a backstop that RESOLVES with an on-chain error is not a landing -------------
+  // web3.js `confirmTransaction` does not throw for a transaction that landed and then reverted:
+  // it RESOLVES, carrying `value.err`. Reading that bare resolution as success told the user
+  // "Swap confirmed" for a trade the chain rejected -- the worst verdict this module can produce,
+  // so it is asserted from both directions.
+  console.log('\na backstop resolving with an on-chain error is never a landing');
+  {
+    const REVERTED = { InstructionError: [0, { Custom: 6001 }] };
+    const errBackstop = async () => ({ context: { slot: 777 }, value: { err: REVERTED } });
+
+    // Status behind, blockhash dead -- the exact path that used to short-circuit to `landed`.
+    const stub = installStub({
+      status: (n: number) =>
+        n <= 2 ? null : { slot: 777, err: REVERTED, confirmationStatus: 'confirmed' },
+      blockhashValid: () => false,
+    });
+    const verdict: Verdict = await resolveConfirmation(SENT, errBackstop);
+    check(
+      'a reverted transaction is reported as failed, not confirmed',
+      verdict.kind === 'failed',
+      describeVerdict(verdict),
+    );
+    check('and never as landed', verdict.kind !== 'landed', 'kind=' + verdict.kind);
+    stub.restore();
+  }
+
+  // The mirror, so the fix cannot have broken the success path it sits on.
+  console.log('\na backstop resolving cleanly is still a landing');
+  {
+    const stub = installStub({
+      status: (n: number) =>
+        n <= 2 ? null : { slot: 901, err: null, confirmationStatus: 'confirmed' },
+      blockhashValid: () => false,
+    });
+    const verdict: Verdict = await resolveConfirmation(SENT, async () => ({
+      context: { slot: 901 },
+      value: { err: null },
+    }));
+    check(
+      'a clean backstop still reports landed',
+      verdict.kind === 'landed',
+      describeVerdict(verdict),
+    );
+    stub.restore();
+  }
+
   console.log(`\n${failed === 0 ? GREEN : RED}${passed} passed, ${failed} failed${RESET}\n`);
   if (failed > 0) process.exit(1);
 }

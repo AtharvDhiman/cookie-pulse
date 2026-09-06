@@ -131,12 +131,26 @@ function timer(ms: number): { promise: Promise<void>; cancel: () => void } {
   return { promise, cancel: () => clearTimeout(handle) };
 }
 
+/**
+ * How long a single status read may take. Without this the MAX_RESOLVE_MS ceiling below was
+ * advisory: it is only tested BETWEEN polls, so one socket that opens and never answers — a wedged
+ * load-balancer backend, a captive portal, a node in a GC pause — parked the UI on "Waiting for
+ * confirmation" indefinitely, which is the exact failure the ceiling was written to prevent.
+ */
+const STATUS_TIMEOUT_MS = 8_000;
+
 /** `null` = the node answered and has no record. `undefined` = the node did not answer usefully. */
 async function readStatus(signature: string): Promise<SignatureStatus | null | undefined> {
+  const ac = new AbortController();
+  const cutoff = setTimeout(() => ac.abort(), STATUS_TIMEOUT_MS);
   try {
-    return parseSignatureStatus(await fetchSignatureStatus(signature));
+    return parseSignatureStatus(await fetchSignatureStatus(signature, ac.signal));
   } catch {
+    // An abort lands here too, and is the same class of information as any other RPC failure:
+    // something about the node, nothing about the transaction.
     return undefined;
+  } finally {
+    clearTimeout(cutoff);
   }
 }
 
@@ -187,8 +201,15 @@ export async function resolveConfirmation(
   const backstopState = { confirmed: false, done: false, graceUntil: null as number | null };
 
   const settled = backstop(sent).then(
-    () => {
-      backstopState.confirmed = true;
+    (res) => {
+      // web3.js `confirmTransaction` RESOLVES — it does not throw — for a transaction that landed
+      // in a block and then failed: the SignatureResult it hands back carries `value.err`. Reading
+      // a bare resolution as success is therefore the difference between "Swap confirmed" and
+      // "Swap failed" on a reverted trade, which is the one mistake this module exists to prevent.
+      //
+      // An unrecognised shape counts as confirmed, which is the behaviour every other strategy
+      // (legacy timeout, durable nonce) already relied on. Only a present `err` demotes it.
+      backstopState.confirmed = pick(res, ['value', 'err']) == null;
       backstopState.done = true;
       backstopState.graceUntil = Date.now() + BACKSTOP_GRACE_MS;
     },
@@ -247,6 +268,14 @@ export async function resolveConfirmation(
  */
 async function landedWithoutSlot(sent: SentTx): Promise<Verdict> {
   const status = await readStatus(sent.signature);
-  if (status) return { kind: 'landed', slot: status.slot };
+  // Was `if (status) return { kind: 'landed', ... }` — the only place in this file that read a
+  // status without asking whether it carried an error, so a re-read that came back FAILED was
+  // still reported as a landing. Everything else here routes through `verdictFor`.
+  if (status) {
+    if (status.err !== null && status.err !== undefined) {
+      return { kind: 'failed', slot: status.slot, error: errText(status.err) };
+    }
+    return { kind: 'landed', slot: status.slot };
+  }
   return { kind: 'landed', slot: null };
 }

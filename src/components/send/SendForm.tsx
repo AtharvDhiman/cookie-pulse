@@ -15,6 +15,7 @@ import {
   TransactionMessage,
   VersionedTransaction,
 } from '@solana/web3.js';
+import { useQuery } from '@tanstack/react-query';
 import { useConnection, useWallet } from '@solana/wallet-adapter-react';
 import { useWalletModal } from '@solana/wallet-adapter-react-ui';
 import {
@@ -31,6 +32,8 @@ import {
   FEE_RESERVE_COOK,
   LAMPORTS_PER_COOK,
   MEMO_PROGRAM_ID,
+  TOKEN_2022_PROGRAM_ID,
+  TOKEN_PROGRAM_ID,
   explorerTx,
 } from '@/lib/config';
 import { formatAmount, formatUsd, shortAddr, toRawAmount } from '@/lib/format';
@@ -313,6 +316,37 @@ export function SendForm() {
     }
   }, [recipient]);
 
+  /**
+   * Can this recipient actually own tokens?
+   *
+   * `new PublicKey(value)` only proves the string is 32 well-formed bytes. It says nothing about
+   * what lives at that address, and the SPL path derives the destination ATA with
+   * `allowOwnerOffCurve = true`, so a pasted TOKEN ACCOUNT, PDA or program id was accepted and the
+   * transfer built against it. Tokens sent to an address that cannot sign are unrecoverable.
+   *
+   * One `getAccountInfo` answers it: an executable account is a program, and an account owned by
+   * either token program is itself a token account.
+   */
+  const { data: recipientAccount, isFetched: recipientFetched } = useQuery({
+    queryKey: ['recipient-account', recipientPk?.toBase58() ?? null],
+    enabled: Boolean(recipientPk),
+    queryFn: () => connection.getAccountInfo(recipientPk as PublicKey, 'confirmed'),
+    staleTime: 30_000,
+    retry: 1,
+  });
+
+  const recipientOwner = recipientAccount?.owner.toBase58();
+  const recipientUnusable = Boolean(
+    recipientAccount &&
+      (recipientAccount.executable ||
+        recipientOwner === TOKEN_PROGRAM_ID ||
+        recipientOwner === TOKEN_2022_PROGRAM_ID),
+  );
+  // The probe must have ANSWERED before the form is armed. react-query leaves `data` undefined
+  // while pending, so without this a paste-then-immediately-click sends before the check returns
+  // -- which is exactly the case the check exists for.
+  const recipientChecked = !recipientPk || recipientFetched;
+
   const recipientInvalid = recipient.trim() !== '' && !recipientPk;
   const sendingToSelf = Boolean(recipientPk && publicKey && recipientPk.equals(publicKey));
 
@@ -373,10 +407,17 @@ export function SendForm() {
 
   // Readiness reads the parsed key, never the debounced note: what is displayed may lag by 350ms,
   // what is signed never does.
-  const ready = Boolean(publicKey && recipientPk && amountRaw && !amountError);
+  const ready = Boolean(
+    publicKey && recipientPk && amountRaw && !amountError && recipientChecked && !recipientUnusable,
+  );
 
   const build = useCallback(async (): Promise<BuiltTx> => {
     if (!publicKey || !recipientPk || !amountRaw) throw new Error('Form is incomplete.');
+    // Re-checked here rather than trusted from render state: this is the last point before a
+    // transaction is built, and the consequence of being wrong is unrecoverable.
+    if (recipientUnusable) {
+      throw new Error('That address cannot own tokens, so anything sent there is unrecoverable.');
+    }
     const raw = BigInt(amountRaw);
 
     const { blockhash, lastValidBlockHeight } =
@@ -569,6 +610,15 @@ export function SendForm() {
             )}
           />
           {showRecipientError ? <FieldNote tone="error">Not a valid address.</FieldNote> : null}
+          {/* Stated plainly, because the consequence is permanent. A valid-looking address that
+              cannot sign will accept the transfer and nobody can ever move it again. */}
+          {recipientUnusable ? (
+            <FieldNote tone="error">
+              {recipientAccount?.executable
+                ? 'That address is a program, not a wallet. Tokens sent there cannot be recovered.'
+                : 'That address is a token account, not a wallet. Tokens sent there cannot be recovered.'}
+            </FieldNote>
+          ) : null}
           {showSelfNote ? (
             <FieldNote tone="warn">
               This is your own address. The transfer will work, but it only costs you the fee.

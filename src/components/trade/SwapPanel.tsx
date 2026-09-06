@@ -364,7 +364,7 @@ export function SwapPanel({
   // `isRefreshing` is deliberately NOT read: nothing on this route may key off a fetch. The quote
   // refetches every 10 seconds — roughly 360 times an hour with the tab open — and a poll applies
   // no force, so nothing is allowed to move on one.
-  const { quote, noRoute, isQuoting, isPaused, error: quoteError, refetch } =
+  const { quote, quotedAmountRaw, noRoute, isQuoting, isPaused, error: quoteError, refetch } =
     useQuote({
       inputMint,
       outputMint,
@@ -376,6 +376,17 @@ export function SwapPanel({
       // the one they read. The 10s refresh resumes the moment the run reaches confirmed or failed.
       paused: tx.pending,
     });
+
+  /**
+   * Does the quote on screen describe the amount currently in the box?
+   *
+   * The quote is keyed off the amount DEBOUNCED by 400ms, but `swap()` builds the transaction from
+   * the live `rawAmount`. For up to 400ms after any keystroke or a Max click, those are different
+   * trades -- and nothing stopped the user signing the live amount against the numbers from the
+   * stale one. The "You receive" and "Minimum received" figures they read would not be the ones
+   * they got.
+   */
+  const amountMatchesQuote = quote !== null && quotedAmountRaw === rawAmount;
 
   /**
    * The quoting state this panel is allowed to RENDER, which is narrower than the hook's.
@@ -490,6 +501,9 @@ export function SwapPanel({
       return;
     }
     if (!inputToken || !outputToken || !rawAmount || !address || !quote) return;
+    // The panel is showing a quote for a different amount than the box holds. Refusing here also
+    // closes the paths that reach swap() without going through the button's disabled state.
+    if (!amountMatchesQuote) return;
     const owner = address;
     const amountRaw = rawAmount;
     // The quote as it stands at the click — the trade the user is agreeing to. It is frozen for the
@@ -568,6 +582,9 @@ export function SwapPanel({
     // `quoting`, not `isQuoting`: `loading` mounts a spinning Loader2, and keying that off a
     // background refetch would spin it for half a second every ten seconds, forever.
     if (quoting) return { label: 'Fetching quote…', disabled: true, loading: true };
+    // Ordered after `quoting` so a first fetch still reads as fetching, and before the quote
+    // checks below so a stale-but-present quote cannot satisfy them.
+    if (!amountMatchesQuote) return { label: 'Fetching quote…', disabled: true, loading: true };
     if (noRoute) return { label: 'No route for this pair', disabled: true, loading: false };
     if (!quote) return { label: 'Quote unavailable', disabled: true, loading: false };
     return { label: `Swap ${inputToken.symbol} for ${outputToken.symbol}`, disabled: false, loading: false };

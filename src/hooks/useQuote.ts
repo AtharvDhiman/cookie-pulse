@@ -14,7 +14,7 @@
 // The 10s refresh stops entirely while `paused` is set. A quote that changes under an open Nightly
 // window would mean the "You receive" figure the user is looking at is not the one they are
 // approving, which is the single thing this panel must never do.
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { getQuote } from '@/lib/api';
 import { toRawAmount } from '@/lib/format';
@@ -51,6 +51,15 @@ export interface UseQuoteArgs {
 
 export interface UseQuoteResult {
   quote: Quote | null;
+  /**
+   * The raw input amount this quote was actually fetched for.
+   *
+   * The query key is built from the DEBOUNCED amount, so for up to 400ms after a keystroke the
+   * quote on screen describes a different trade than the one the input box holds. Callers that
+   * build a transaction must compare this against their own live raw amount and refuse if they
+   * differ, otherwise a user can sign a swap for an amount the panel never displayed.
+   */
+  quotedAmountRaw: string | null;
   /** The aggregator answered, and there is no pool path for this pair. Not an error. */
   noRoute: boolean;
   /** No usable quote on screen yet: still debouncing, or the first fetch is in flight. */
@@ -110,16 +119,38 @@ export function useQuote({
 
   const settling = amount !== debouncedAmount;
 
-  return {
+  // `paused` sets `enabled: false`, which stops NEW requests but does not cancel one already in
+  // flight: it resolves, writes to the cache, and notifies the observer. So a refetch that started
+  // ~200ms before the user clicked Swap could still replace the numbers behind an open Nightly
+  // window -- which is the one thing this hook's own header comment says must never happen.
+  //
+  // Disabling was therefore necessary but not sufficient. The whole derived snapshot is held here,
+  // not just `quote`: a late resolution to null would otherwise flip `noRoute` true (deleting the
+  // rate and minimum-received block out from under the signature), and a late rejection would
+  // raise the router-error banner mid-approval.
+  const live = {
     quote: query.data ?? null,
     noRoute: quotable && query.isSuccess && query.data === null,
+    error: query.error,
+    quotedAmountRaw: rawAmount,
+  };
+  const held = useRef(live);
+  // Idempotent per render, and never while paused -- so the last pre-pause snapshot survives the
+  // entire signing run and is restored coherently when the caller unpauses.
+  if (!paused) held.current = live;
+  const shown = paused ? held.current : live;
+
+  return {
+    quote: shown.quote,
+    quotedAmountRaw: shown.quotedAmountRaw,
+    noRoute: shown.noRoute,
     // `settling` is deliberately outside the `quotable` gate: typing the first character of an
     // empty field leaves the debounced value at '' for 400ms, so `quotable` is still false while a
     // request is plainly imminent. Gating on it there would flash "no route" mid-keystroke.
     isQuoting: !paused && (settling || (quotable && query.isFetching && !query.data)),
     isRefreshing: query.isFetching && Boolean(query.data),
     isPaused: paused,
-    error: query.error,
+    error: shown.error,
     // `refetch()` ignores `enabled`, so the pause has to be honoured here too — otherwise the
     // router-error Retry button could still move the numbers mid-signature.
     refetch: () => {

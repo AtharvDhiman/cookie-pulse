@@ -28,7 +28,7 @@ import { useChainHealth } from "@/hooks/useChainHealth";
 import { COOK_SYMBOL } from "@/lib/config";
 import { compact, formatUsd } from "@/lib/format";
 import { CountUp } from "@/components/motion/CountUp";
-import { OrbitSystem } from "./OrbitSystem";
+import { ActivityChart } from "./ActivityChart";
 import { LABEL_MUTED, cn, Skeleton, StatusDot } from '@/components/ui/primitives';
 
 // Module-scoped, as useCountUp requires: an inline arrow is a fresh prop identity on every render,
@@ -95,7 +95,7 @@ export function Hero() {
       </div>
 
       {/* ── 2. billing ────────────────────────────────────────────────────────────────────── */}
-      <div className="grid items-center gap-6 px-3 py-6 sm:px-5 sm:py-7 lg:grid-cols-[minmax(0,1fr)_minmax(0,20rem)] lg:gap-8">
+      <div className="grid items-center gap-6 px-3 py-6 sm:px-5 sm:py-7 lg:grid-cols-[minmax(0,1fr)_minmax(0,28rem)] lg:gap-10">
         <div className="min-w-0 max-w-2xl">
           {/* Mono, uppercase, at roughly two thirds of the old size. It still reads as the
               headline because nothing else on the page is this large — it no longer needs a
@@ -141,12 +141,18 @@ export function Hero() {
           </div>
         </div>
 
-        {/* The scope. Desktop only: at 390x844 the masthead measured 893px — taller than the
-            viewport — with the diagram cut in half by the fold, pushing the first real data below
-            it. On a phone the tape underneath is the better use of that screen. */}
-        <div data-enter style={step(4)} className="hidden min-w-0 lg:block">
-          <OrbitSystem />
-        </div>
+        {/* The chart. This slot held a decorative orbit diagram — the last thing on the page
+            that was drawn rather than measured. A price chart was the intent, but Cookiescan
+            publishes no price history (see ActivityChart), so this is the real series instead.
+
+            Desktop only: at 390x844 the masthead measured 893px — taller than the viewport —
+            with the old diagram cut in half by the fold. On a phone the tape underneath is the
+            better use of that screen, and the same series is in the strip below. */}
+        {health?.perf && health.perf.nonVotePerMinute.length > 0 ? (
+          <div data-enter style={step(4)} className="hidden min-w-0 lg:block">
+            <ActivityChart perf={health.perf} />
+          </div>
+        ) : null}
       </div>
 
       {/* ── 3. tape ───────────────────────────────────────────────────────────────────────── */}

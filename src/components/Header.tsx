@@ -123,16 +123,16 @@ export function Header() {
     >
       <div className="mx-auto w-full max-w-[1280px] px-3 sm:px-6">
         <div className="flex h-16 items-center justify-between gap-2">
-          <Link href="/" className="group flex shrink-0 items-center gap-2.5">
+          <Link href="/" className="group flex shrink-0 items-center gap-3">
             {/* The tile no longer rotates. A logo that spins on hover is a decoration a designer
                 would have cut — it says nothing about the product and it is the first thing on the
                 page. What is left is a 2% scale, which reads as "this is a link". */}
-            <span className="accent-gradient flex h-8 w-8 items-center justify-center text-accent-ink transition-transform duration-[220ms] ease-[cubic-bezier(.2,.7,.3,1)] group-hover:scale-[1.02] group-active:scale-[.98]">
-              <Logo size={19} />
+            <span className="accent-gradient flex h-10 w-10 items-center justify-center text-accent-ink transition-transform duration-[220ms] ease-[cubic-bezier(.2,.7,.3,1)] group-hover:scale-[1.02] group-active:scale-[.98]">
+              <Logo size={25} />
             </span>
             {/* The wordmark gets nothing: a travelling sheen on background-clip:text repaints every
                 frame, inside a sticky backdrop-filtered bar, permanently, in peripheral vision. */}
-            <span className="font-mono text-[15px] font-bold uppercase tracking-[0.02em]">
+            <span className="font-mono text-[19px] font-bold uppercase tracking-[0.01em]">
               Cookie<span className="accent-text">Pulse</span>
             </span>
           </Link>

@@ -153,28 +153,11 @@ function Metrics({ data }: { data: ChainHealth }) {
       )}
 
       {hasWindow ? (
-        <div className="grid gap-px border-t border-hairline/10 bg-rule sm:grid-cols-2">
-          <div className={CELL}>
-            <p className={cn('truncate', LABEL_MUTED)}>
-              Non-vote transactions · last {perf.minutes}m
-            </p>
-            <div className="mt-1.5">
-              <Sparkline
-                values={perf.nonVotePerMinute}
-                ariaLabel={`Non-vote transactions per minute over the last ${perf.minutes} minutes`}
-                formatValue={(v, i) =>
-                  `${perf.minutes - i}m ago: ${v} non-vote ${v === 1 ? 'transaction' : 'transactions'}`
-                }
-                tone="accent"
-              />
-            </div>
-            {/* The count is computed from the series, never assumed — on a chain this quiet it is
-                usually most of the window, and stating it is what stops the chart reading as broken. */}
-            <p className="mt-1 truncate text-[11px] text-muted">
-              {perf.zeroActivityMinutes} of the last {perf.minutes} minutes had no non-vote activity
-            </p>
-          </div>
-
+        // One cell, not two. The non-vote series that used to sit on the left is now the masthead
+        // chart at the top of this same screen, with axes and a crosshair; keeping a 34px copy of
+        // it here meant the landing page showed one series twice, which is the kind of redundancy
+        // that reads as padding. Block rate stays, because nothing else plots it.
+        <div className="grid gap-px border-t border-hairline/10 bg-rule">
           <div className={CELL}>
             <p className={cn('truncate', LABEL_MUTED)}>
               Block rate · last {perf.minutes}m

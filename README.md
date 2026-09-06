@@ -4,8 +4,8 @@
 [Cookie Chain](https://cookiescan.io) — token screener, portfolio, real swaps through the Cookiebox
 aggregator, and a live activity feed, all in one app.
 
-**Live:** `<!-- paste your Vercel URL here -->`
-**Repo:** `<!-- paste your GitHub URL here -->`
+**Live:** <https://cookie-pulse-ayushdhiman9997-8957s-projects.vercel.app>
+**Repo:** <https://github.com/AtharvDhiman/cookie-pulse>
 
 Connect with [Nightly](https://nightly.app), and every number on screen comes from Cookie Chain
 mainnet — no mock data anywhere in this repo.
@@ -125,7 +125,7 @@ differs from the original spec: [`NOTES.md`](NOTES.md).
 ## Run locally
 
 ```bash
-git clone <this repo> cookie-pulse && cd cookie-pulse
+git clone https://github.com/AtharvDhiman/cookie-pulse && cd cookie-pulse
 npm install
 npm run dev
 ```
@@ -152,7 +152,19 @@ that keep the token-safety copy factual).
 `npm run smoke` needs `npm run dev` running in another terminal. It asserts that the registry is
 non-empty, that COOK's price is a number, that the markets feed carries TVL, and that a real
 COOK → top-volume-token quote comes back with a route. It defaults to `http://localhost:3000`;
-point it anywhere else — another port, or the deployed URL — with `BASE_URL=… npm run smoke`.
+point it anywhere else — another port, or the deployed URL — with `BASE_URL=…`:
+
+```bash
+BASE_URL=https://cookie-pulse-ayushdhiman9997-8957s-projects.vercel.app npm run smoke
+```
+
+On PowerShell the inline-variable prefix is not a thing, so:
+
+```bash
+$env:BASE_URL="https://cookie-pulse-ayushdhiman9997-8957s-projects.vercel.app"; npm run smoke
+```
+
+Run against the deployment above: **29 passed, 0 failed**.
 
 `npm run shots` drives headless Chrome over CDP and takes the base URL as its argument
 (`npm run shots -- http://localhost:3000`). It adds no dependency: `chrome-launcher` is already in
@@ -254,10 +266,13 @@ of `3863.45` USD. Full working in [`NOTES.md`](NOTES.md).
 
 ## Wallet test checklist
 
-Everything that does not need a signature is verified: 19/19 API smoke checks pass against live
-services, and `tsc`, `eslint` and `next build` are all clean. The signature paths are written to be
-correct by construction but have **not** been run against a funded wallet. This is what to try, in
-order — total cost is a fraction of a cent.
+Everything that does not need a signature is verified: **29/29 API smoke checks pass against the
+live deployment**, `tsc`, `eslint` and `next build` are clean, and 69 unit assertions cover the
+error mapping, the confirmation verdicts and the token-safety copy.
+
+The signature paths are written to be correct by construction and are covered by unit tests, but
+have **not** been run against a funded wallet. That is the one gap. Work through this against the
+live app — <https://cookie-pulse-ayushdhiman9997-8957s-projects.vercel.app> — or a local `npm run dev`; total cost is a fraction of a cent.
 
 **Setup**
 - [ ] Nightly installed, Cookie Chain RPC added (Settings → Networks → Solana), a little COOK bridged in.

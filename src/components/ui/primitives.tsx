@@ -60,12 +60,13 @@ export function Card({
  * caller appending `text-ink2` to a base containing `text-muted` gets whichever rule happens to
  * sit later in the compiled sheet. Anything wanting a different colour composes `LABEL` instead.
  */
-export const LABEL = 'text-[10px] font-semibold uppercase tracking-[0.14em]';
+export const LABEL =
+  'font-mono text-[10px] font-semibold uppercase tracking-[0.12em] leading-none';
 export const LABEL_MUTED = `${LABEL} text-muted`;
 
 /** The MAX / HALF micro-buttons that sit inside the two amount fields. */
 export const MICRO_ACTION =
-  'press press-sm shrink-0 rounded-md border border-hairline/10 bg-surface px-2 py-1 text-[10px] font-bold uppercase tracking-[0.08em] text-accent transition-colors hover:border-accent/50 hover:bg-accent/10 disabled:cursor-not-allowed disabled:opacity-40';
+  'press press-sm shrink-0 border border-hairline/25 bg-surface2 px-1.5 py-0.5 font-mono text-[10px] font-bold uppercase tracking-[0.08em] text-accent transition-colors hover:border-accent/60 hover:bg-accent/10 disabled:cursor-not-allowed disabled:opacity-40';
 
 /** Small uppercase label above a section — the reference leans on these heavily. */
 export function Eyebrow({ children, className }: { children: ReactNode; className?: string }) {
@@ -106,15 +107,19 @@ export function CardHeader({
   return (
     <div
       className={cn(
-        'flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b border-hairline/10 px-4 py-3 sm:px-5',
+        // Denser than the glass design and ruled on both edges. `bg-surface2` makes the head a
+        // band rather than a floating caption, which is how a terminal separates a region.
+        'flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b border-hairline/20 bg-surface2/60 px-3 py-2 sm:px-4',
         className,
       )}
     >
       <div className="min-w-0 flex-1">
         {eyebrow ? <Eyebrow className="mb-1">{eyebrow}</Eyebrow> : null}
+        {/* Uppercase mono. A section head in a terminal is set in the same face as the data
+            under it, because it is the same kind of object: a field name. */}
         <h2
           className={cn(
-            'flex items-center gap-1.5 font-display text-sm font-bold tracking-tight',
+            'flex items-center gap-1.5 font-mono text-[12px] font-bold uppercase tracking-[0.08em] text-ink',
             titleClassName,
           )}
         >
@@ -122,7 +127,7 @@ export function CardHeader({
           {title}
         </h2>
         {subtitle ? (
-          <p className="mt-0.5 text-[11px] leading-relaxed text-muted">{subtitle}</p>
+          <p className="mt-1 text-[11px] leading-relaxed text-muted">{subtitle}</p>
         ) : null}
       </div>
       {meta ? <div className="flex shrink-0 items-center gap-2">{meta}</div> : null}
@@ -143,9 +148,14 @@ export function Skeleton({ className }: { className?: string }) {
 
 export function EmptyState({ title, hint }: { title: string; hint?: string }) {
   return (
-    <div className="flex flex-col items-center justify-center gap-1.5 px-4 py-12 text-center">
-      <p className="text-sm font-semibold text-ink2">{title}</p>
-      {hint ? <p className="max-w-sm text-xs leading-relaxed text-muted">{hint}</p> : null}
+    // Left-aligned and rule-marked rather than centred. A centred empty state reads as a
+    // designed illustration slot; a terminal reports the absence in the same column as the data.
+    <div className="flex flex-col gap-1.5 px-4 py-10 sm:px-5">
+      <p className="font-mono text-[12px] font-bold uppercase tracking-[0.08em] text-ink2">
+        <span className="mr-2 text-muted">──</span>
+        {title}
+      </p>
+      {hint ? <p className="max-w-md text-xs leading-relaxed text-muted">{hint}</p> : null}
     </div>
   );
 }
@@ -167,7 +177,9 @@ export function Pill({
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-2 py-0.5 text-[11px] font-semibold',
+        // Square. A rounded-full tag is a web-app convention; a terminal tags a row with a boxed
+        // code. Mono so a tag never changes the height of the row it sits in.
+        'inline-flex items-center gap-1 whitespace-nowrap border px-1.5 py-px font-mono text-[10px] font-semibold uppercase tracking-[0.06em]',
         tones[tone],
       )}
     >

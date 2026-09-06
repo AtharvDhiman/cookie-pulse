@@ -133,7 +133,7 @@ export default function BridgePage() {
           hydration. The h1 and the intro rise as one unit: two lines 12px apart, and staggering
           them would make the header read as two events. */}
       <header className="mb-6" data-enter="" style={{ '--i': 0 } as CSSProperties}>
-        <h1 className="font-display text-[26px] font-extrabold leading-tight tracking-tightest sm:text-[34px]">
+        <h1 className="font-mono text-[22px] font-bold uppercase leading-tight tracking-[-0.02em] sm:text-[28px]">
           How to get <span className="accent-text accent-sweep">COOK</span>
         </h1>
         <p className="mt-2 max-w-prose text-sm text-ink2">
@@ -157,7 +157,7 @@ export default function BridgePage() {
                   {/* Preflight strips the native <ol> marker, so this badge IS the list ordinal —
                       the one beat on this route that carries meaning rather than decoration. It
                       lands 80ms behind its own card, so the user watches 1, 2, 3, 4 count on. */}
-                  <span className="step-badge accent-gradient flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold text-accent-ink shadow-[0_6px_16px_-8px_rgb(var(--accent-glow)/0.8)]">
+                  <span className="step-badge accent-gradient flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold text-accent-ink">
                     {step.n}
                   </span>
                   <div className="min-w-0 flex-1">

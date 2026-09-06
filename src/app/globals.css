@@ -2,46 +2,68 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ── Design language ──────────────────────────────────────────────────────────────────────────
-   Near-black ground, a warm radial glow bleeding up from behind the content, translucent "glass"
-   surfaces with a hairline top highlight, and one orange accent that carries a gradient.
-   Dark is the default; `.light` on <html> swaps every token. Nothing is defined only inside a
-   media query, so the toggle wins in both directions.
-   ─────────────────────────────────────────────────────────────────────────────────────────── */
+/* Design language: a trading terminal.
+   ---------------------------------------------------------------------------------------------
+   What was here before -- near-black ground, warm radial glow, translucent glass panels with an
+   inner highlight, a gradient accent on the headline -- was competent and completely generic. It
+   is what every generated web3 dashboard looks like, which is a poor thing to be in a field of
+   submissions that will all look like it.
+
+   This is a terminal instead, and it is not a costume: it is what the app already is. A terminal
+   is drawn with RULES, not boxes. Structure comes from hairlines and alignment rather than from
+   floating cards; everything numeric is monospaced and tabular so columns line up down the whole
+   page; labels are small uppercase mono; and the accent is amber because that is the colour of
+   the thing being imitated.
+
+   Deliberately gone, and why each one mattered:
+     backdrop-filter blur   a translucent panel floating over a glow is decoration, and it forced
+                            every panel to become its own compositing layer.
+     radial glow blobs      the loudest generated-dashboard signal there is.
+     gradient text          the second loudest, and unfixable on a light ground: the ink IS the
+                            gradient, so contrast cannot be corrected without deleting the effect.
+     16px corner radii      collapsed to 2px in tailwind.config.ts rather than swept by hand.
+     card drop shadows      a terminal has no z-axis. Rules do the separating.
+
+   Dark is the default; `.light` swaps every token. Nothing is defined only inside a media query,
+   so the toggle wins in both directions.
+   --------------------------------------------------------------------------------------------- */
 :root {
   color-scheme: dark;
 
-  --ground: 8 9 12;
-  --ground-2: 12 14 19;
-  --surface: 20 22 29;
-  --surface-2: 28 31 40;
-  --surface-glass: 255 255 255;
-  --surface-glass-alpha: 0.035;
+  --ground: 10 11 13;
+  --ground-2: 13 14 17;
+  --surface: 17 18 21;
+  --surface-2: 24 26 30;
+  --surface-glass: 17 18 21;
+  --surface-glass-alpha: 1;
   --hairline: 255 255 255;
-  --hairline-alpha: 0.07;
+  --hairline-alpha: 0.11;
 
-  --ink: 237 239 244;
-  --ink-2: 174 181 195;
-  --muted: 128 137 154;
-  --rule: 40 45 58;
+  --ink: 228 231 237;
+  --ink-2: 158 166 178;
+  --muted: 124 132 145;
+  --rule: 36 39 45;
 
-  --accent: 255 122 45;
-  --accent-2: 255 158 92;
-  --accent-ink: 20 12 6;
-  --accent-glow: 255 106 26;
+  --accent: 255 176 46;
+  --accent-2: 255 199 105;
+  /* The colour of a large filled shape: the primary button, the orbit core. Identical to --accent
+     in dark, where a vivid amber already clears both floors; they diverge only in light. */
+  --accent-fill: 255 176 46;
+  --accent-ink: 14 11 4;
+  --accent-glow: 255 176 46;
 
-  --up: 61 214 156;
-  --down: 255 99 92;
-  --warn: 246 189 96;
+  --up: 52 211 153;
+  --down: 248 113 113;
+  --warn: 251 191 36;
 
   /* The ambient wash behind everything — the single biggest visual cue from the reference. */
-  --glow-a: 255 92 20;
-  --glow-b: 214 54 32;
-  --glow-strength: 0.24;
-  --glow-strength-2: 0.16;
+  --glow-a: 255 176 46;
+  --glow-b: 255 176 46;
+  --glow-strength: 0;
+  --glow-strength-2: 0;
 
-  --shadow-card: 0 1px 0 0 rgb(255 255 255 / 0.04) inset, 0 12px 32px -18px rgb(0 0 0 / 0.9);
-  --shadow-lift: 0 20px 50px -24px rgb(0 0 0 / 0.95);
+  --shadow-card: none;
+  --shadow-lift: none;
 
   /* Skeleton sweep. Was a hard-coded white in the component, which is a no-op against a white
      light-theme surface — every loading state on the app silently lost its motion when the theme
@@ -95,21 +117,21 @@
 .light {
   color-scheme: light;
 
-  --ground: 244 245 248;
-  --ground-2: 249 250 252;
+  --ground: 250 250 249;
+  --ground-2: 255 255 255;
   --surface: 255 255 255;
-  --surface-2: 245 246 249;
+  --surface-2: 244 244 242;
   --surface-glass: 255 255 255;
-  --surface-glass-alpha: 0.72;
-  --hairline: 15 20 32;
-  --hairline-alpha: 0.08;
+  --surface-glass-alpha: 1;
+  --hairline: 24 24 27;
+  --hairline-alpha: 0.16;
 
-  --ink: 18 21 28;
-  --ink-2: 60 67 80;
+  --ink: 24 24 27;
+  --ink-2: 63 68 76;
   /* 4.44:1 before — it failed on --ground AND on --surface-2 while carrying the nav, the footer
      and every stat label in the app. 4.71:1 / 4.75:1 / 5.13:1 now, same hue. */
-  --muted: 102 110 125;
-  --rule: 219 223 231;
+  --muted: 90 96 106;
+  --rule: 222 222 219;
 
   /* Darker than they look like they should be, and measured rather than eyeballed. The previous
      pair (214 74 16 / 236 116 46) put the .accent-text wordmark, the hero's second line and the
@@ -119,27 +141,36 @@
      6.01:1 and 5.16:1, which is why --accent-ink stays white here rather than flipping to a dark
      ink: the CTA passes on the darkened gradient as it is. The gradient is flatter in light than
      in dark; that is the cost of a legible wordmark, and it is the right trade. */
-  --accent: 176 60 10;
-  --accent-2: 190 70 10;
-  --accent-ink: 255 255 255;
-  --accent-glow: 176 60 10;
+  /* Text amber: 4.68:1 on --ground, so the wordmark, the headline's second line and all 32
+     text-accent usages clear AA. It is deliberately duller than the brand amber, because that is
+     what legibility on white costs. */
+  --accent: 160 92 0;
+  --accent-2: 174 104 6;
+  /* Fill amber: vivid, because a filled shape only owes 3:1 and this is what makes the button and
+     the scope core look like amber instead of like rust. Paired with a DARK ink below, it
+     measures 5.94:1 — better than the white-on-brown it replaces, and far better looking. */
+  --accent-fill: 217 119 6;
+  /* Dark, not white. White on a vivid amber fill is 3.19:1 and fails; near-black on it is 5.94:1
+     and is also how the dark theme already treats the same surface. */
+  --accent-ink: 26 18 6;
+  --accent-glow: 166 96 0;
 
-  --up: 22 122 92;
-  --down: 189 48 40;
-  --warn: 150 96 8;
+  --up: 13 124 92;
+  --down: 185 42 36;
+  --warn: 146 92 6;
 
-  --glow-a: 255 146 84;
-  --glow-b: 255 187 140;
-  --glow-strength: 0.3;
-  --glow-strength-2: 0.22;
+  --glow-a: 166 96 0;
+  --glow-b: 166 96 0;
+  --glow-strength: 0;
+  --glow-strength-2: 0;
 
-  --shadow-card: 0 1px 0 0 rgb(255 255 255 / 0.8) inset, 0 8px 24px -16px rgb(15 20 32 / 0.28);
-  --shadow-lift: 0 18px 44px -22px rgb(15 20 32 / 0.3);
+  --shadow-card: none;
+  --shadow-lift: none;
 
   /* Dark sweep over light surfaces. Slightly stronger than the dark theme's: the eye is less
      sensitive to a darkening than to a lightening at the same delta. */
-  --shimmer: 15 20 32;
-  --shimmer-alpha: 0.09;
+  --shimmer: 24 24 27;
+  --shimmer-alpha: 0.08;
 }
 
 /* Written here rather than as a Tailwind arbitrary value: `via-[rgb(var(--x)/var(--y))]` collides
@@ -180,18 +211,10 @@ body {
   inset: -96px 0;
   z-index: -1;
   pointer-events: none;
-  background:
-    radial-gradient(
-      68rem 40rem at 50% -10%,
-      rgb(var(--glow-a) / var(--glow-strength)),
-      transparent 62%
-    ),
-    radial-gradient(
-      52rem 32rem at 88% 8%,
-      rgb(var(--glow-b) / var(--glow-strength-2)),
-      transparent 60%
-    ),
-    linear-gradient(180deg, rgb(var(--ground-2)) 0%, rgb(var(--ground)) 46%);
+  /* Flat. The two radial washes that used to sit here were the loudest generated-dashboard
+     signal in the app, and their tokens are now zeroed so nothing paints even if a rule is
+     missed. A terminal's ground is one colour; depth would be a lie about a 2D readout. */
+  background: rgb(var(--ground));
 }
 
 /* Faint grid, the way the reference textures its dark ground. Masked so it fades out downward. */
@@ -202,52 +225,62 @@ body {
   background-image:
     linear-gradient(rgb(var(--hairline) / 0.5) 1px, transparent 1px),
     linear-gradient(90deg, rgb(var(--hairline) / 0.5) 1px, transparent 1px);
-  background-size: 64px 64px;
-  opacity: 0.05;
-  mask-image: linear-gradient(180deg, rgb(0 0 0 / 0.9), transparent 70%);
-  -webkit-mask-image: linear-gradient(180deg, rgb(0 0 0 / 0.9), transparent 70%);
+  /* Tighter and constant. It was 64px and masked to fade away down the page, which made it a
+     decorative vignette; at 40px and unmasked it reads as the graticule of a readout. */
+  background-size: 40px 40px;
+  opacity: 0.055;
 }
 
 @layer components {
-  /* Translucent panel with a hairline border and an inner top highlight — the "glass card". */
+  /* A panel is a ruled region, not an object floating above the page. The class names survive
+     so ~30 call sites do not have to change, but nothing about them is glass any more: no blur,
+     no inner highlight, no shadow. One rule, one fill. */
   .glass {
     background: rgb(var(--surface-glass) / var(--surface-glass-alpha));
     border: 1px solid rgb(var(--hairline) / var(--hairline-alpha));
-    box-shadow: var(--shadow-card);
-    backdrop-filter: blur(14px) saturate(1.25);
-    -webkit-backdrop-filter: blur(14px) saturate(1.25);
   }
 
-  /* Opaque variant for dense data surfaces where translucency would hurt legibility. */
+  /* Marginally darker than `.glass`, for dense data regions that should recede behind their own
+     contents. In the glass design this was the OPAQUE variant; now both are opaque and the pair
+     is a two-step depth scale drawn entirely in fill. */
   .glass-solid {
-    background: rgb(var(--surface));
+    background: rgb(var(--ground-2));
     border: 1px solid rgb(var(--hairline) / var(--hairline-alpha));
-    box-shadow: var(--shadow-card);
   }
 
+  /* Flat amber. Still a class rather than a colour utility because it marks "this is THE primary
+     action", which is a role, not a hue — and there is exactly one on screen at a time. */
   .accent-gradient {
-    background-image: linear-gradient(135deg, rgb(var(--accent)), rgb(var(--accent-2)));
+    background-color: rgb(var(--accent-fill));
   }
 
-  /* Accent text that picks up the same gradient as the primary button. */
+  /* Was gradient-clipped text. That effect cannot be made accessible on a light ground, because
+     the ink is the gradient: there is no ink to darken. Flat accent, contrast measurable. */
   .accent-text {
-    background-image: linear-gradient(100deg, rgb(var(--accent)), rgb(var(--accent-2)));
-    -webkit-background-clip: text;
-    background-clip: text;
-    color: transparent;
+    color: rgb(var(--accent));
   }
 
+  /* A ring, not a bloom. */
   .glow-accent {
-    box-shadow:
-      0 0 0 1px rgb(var(--accent) / 0.35),
-      0 10px 30px -10px rgb(var(--accent-glow) / 0.55);
+    box-shadow: 0 0 0 1px rgb(var(--accent) / 0.5);
+  }
+
+  /* Terminal label: the app's small uppercase mono caption, available to raw CSS as well as to
+     the LABEL token in primitives.tsx. */
+  .t-label {
+    font-family: var(--font-mono), ui-monospace, monospace;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: rgb(var(--muted));
   }
 }
 
 :focus-visible {
   outline: 2px solid rgb(var(--accent));
   outline-offset: 2px;
-  border-radius: 6px;
+  border-radius: 2px;
 }
 
 /* Thin, themed scrollbars — the default chrome ones read as a bug on a near-black ground. */
@@ -1012,8 +1045,19 @@ html.js .tp-panel {
   overflow: visible;
 }
 
+/* A scope, not an orrery. The rings were soft strokes under a 120px radial bloom, which read as
+   decoration; on a flat ground the same geometry drawn in hard hairlines reads as an instrument
+   face. Stroke weights are deliberately uneven so the three rings sit at different depths without
+   any blur doing the work. */
 .orbit__path {
   fill: none;
+  stroke: rgb(var(--hairline) / 0.3);
+  stroke-width: 1;
+}
+
+/* The graticule: a crosshair through the centre, the detail that says "readout" rather than
+   "atom". Drawn under everything and never animated. */
+.orbit__grat {
   stroke: rgb(var(--hairline) / 0.16);
   stroke-width: 1;
 }
@@ -1022,13 +1066,17 @@ html.js .tp-panel {
   fill: rgb(var(--accent));
 }
 
+/* Was a soft 18%-alpha bloom around every node. On a flat ground a halo is just a smudge, so the
+   node now gets a hard ring instead — the same trick a radar plot uses to mark a contact. */
 .orbit__halo {
-  fill: rgb(var(--accent-glow) / 0.18);
+  fill: none;
+  stroke: rgb(var(--accent) / 0.35);
+  stroke-width: 1;
 }
 
 .orbit__core-ring {
   fill: none;
-  stroke: rgb(var(--accent-2) / 0.55);
+  stroke: rgb(var(--accent) / 0.9);
   stroke-width: 1;
 }
 
@@ -1043,14 +1091,16 @@ html.js .tp-panel {
 }
 
 .orbit__symbol {
+  font-family: var(--font-mono), ui-monospace, monospace;
   font-size: 10px;
   font-weight: 700;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
   color: rgb(var(--accent-ink));
 }
 
 .orbit__price {
+  font-family: var(--font-mono), ui-monospace, monospace;
   font-size: 11px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
@@ -1069,7 +1119,10 @@ html.js .tp-panel {
     animation: orbit-spin var(--dur, 48s) linear infinite;
   }
 
-  .orbit__svg[data-spinning] .orbit__ring:nth-of-type(odd) {
+  /* Direction is declared by the component now. `:nth-of-type(odd)` counted the ring groups when
+     each held its own ellipse; the ellipses are static and outside those groups today, so every
+     `.orbit__ring` is the same nth-of-type child and the selector silently matched all of them. */
+  .orbit__svg[data-spinning] .orbit__ring[data-rev] {
     animation-direction: reverse;
   }
 

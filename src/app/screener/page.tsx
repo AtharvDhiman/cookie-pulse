@@ -265,7 +265,7 @@ export default function ScreenerPage() {
           <h1
             data-enter
             style={enter(0)}
-            className="font-display text-[26px] font-extrabold leading-tight tracking-tightest sm:text-[34px]"
+            className="font-mono text-[22px] font-bold uppercase leading-tight tracking-[-0.02em] sm:text-[28px]"
           >
             Screener
           </h1>

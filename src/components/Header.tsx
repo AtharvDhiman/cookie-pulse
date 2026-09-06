@@ -39,7 +39,7 @@ function ChainStatus() {
       className={cn(
         // No `capitalize` here: it applies per-WORD, so "RPC down" rendered as "RPC Down". Only
         // the status value needs casing, and it is wrapped for that at the call site below.
-        'hidden items-center gap-2 rounded-full border px-3 py-1.5 text-[11px] font-medium text-ink2 backdrop-blur transition-colors duration-[900ms] md:inline-flex',
+        'hidden items-center gap-2 border px-2.5 py-1 font-mono text-[10px] font-semibold uppercase tracking-[0.08em] text-ink2 transition-colors duration-[900ms] md:inline-flex',
         statusChanged
           ? 'border-warn/40 bg-warn/15 duration-0'
           : 'border-hairline/10 bg-surface2/60',
@@ -53,7 +53,9 @@ function ChainStatus() {
       {data?.latencyMs ? (
         // No `normal-case` needed any more: the pill no longer capitalizes wholesale, so this
         // stopped rendering as "205 Ms" on its own.
-        <span className="inline-block min-w-[3.25rem] text-right tabular-nums text-muted">
+        // `normal-case` because the pill is uppercase and a unit is not an abbreviation:
+        // without it this rendered as "804 MS".
+        <span className="inline-block min-w-[3.5rem] text-right normal-case tabular-nums text-muted">
           {data.latencyMs} ms
         </span>
       ) : null}
@@ -115,7 +117,9 @@ export function Header() {
       ref={headerRef}
       // No transform, no height change, ever: either would destroy `position: sticky` and
       // `backdrop-blur` in one move, and a height change reflows every row below it.
-      className="site-header sticky top-0 z-30 border-b border-hairline/10 bg-ground/70 backdrop-blur-xl"
+      // Opaque, not blurred. A translucent bar over a flat ground has nothing to refract, and
+      // `backdrop-filter` on a sticky element makes it a compositing layer for no return.
+      className="site-header sticky top-0 z-30 border-b border-hairline/20 bg-ground"
     >
       <div className="mx-auto w-full max-w-[1280px] px-3 sm:px-6">
         <div className="flex h-16 items-center justify-between gap-2">
@@ -123,12 +127,12 @@ export function Header() {
             {/* The tile no longer rotates. A logo that spins on hover is a decoration a designer
                 would have cut — it says nothing about the product and it is the first thing on the
                 page. What is left is a 2% scale, which reads as "this is a link". */}
-            <span className="accent-gradient flex h-8 w-8 items-center justify-center rounded-xl text-accent-ink shadow-[0_6px_18px_-8px_rgb(var(--accent-glow)/0.8)] transition-transform duration-[220ms] ease-[cubic-bezier(.2,.7,.3,1)] group-hover:scale-[1.02] group-active:scale-[.98]">
+            <span className="accent-gradient flex h-8 w-8 items-center justify-center text-accent-ink transition-transform duration-[220ms] ease-[cubic-bezier(.2,.7,.3,1)] group-hover:scale-[1.02] group-active:scale-[.98]">
               <Logo size={19} />
             </span>
             {/* The wordmark gets nothing: a travelling sheen on background-clip:text repaints every
                 frame, inside a sticky backdrop-filtered bar, permanently, in peripheral vision. */}
-            <span className="font-display text-[17px] font-extrabold tracking-tightest">
+            <span className="font-mono text-[15px] font-bold uppercase tracking-[0.02em]">
               Cookie<span className="accent-text">Pulse</span>
             </span>
           </Link>
@@ -155,10 +159,13 @@ export function Header() {
                 href={item.href}
                 aria-current={active ? 'page' : undefined}
                 className={cn(
-                  'relative whitespace-nowrap rounded-xl px-3.5 py-1.5 text-[13px] font-medium',
+                  'relative whitespace-nowrap px-3 py-1.5 font-mono text-[11px] font-semibold uppercase tracking-[0.08em]',
                   'transition-[color,background-color] duration-[160ms] ease-[cubic-bezier(.2,.7,.3,1)]',
+                  // The active tab is a filled cell with an amber underline (drawn by the existing
+                  // ::after rule), not an inset-highlighted pill. No inner highlight: that was the
+                  // glass language's way of faking a light source, and there is no light now.
                   active
-                    ? 'bg-surface2 text-ink shadow-[inset_0_1px_0_0_rgb(255_255_255/0.06)]'
+                    ? 'bg-surface2 text-ink'
                     : 'text-muted hover:bg-surface2/50 hover:text-ink2',
                 )}
               >

@@ -17,6 +17,7 @@ const config: Config = {
         hairline: 'rgb(var(--hairline) / <alpha-value>)',
         accent: 'rgb(var(--accent) / <alpha-value>)',
         accent2: 'rgb(var(--accent-2) / <alpha-value>)',
+        'accent-fill': 'rgb(var(--accent-fill) / <alpha-value>)',
         'accent-ink': 'rgb(var(--accent-ink) / <alpha-value>)',
         up: 'rgb(var(--up) / <alpha-value>)',
         down: 'rgb(var(--down) / <alpha-value>)',
@@ -24,8 +25,30 @@ const config: Config = {
       },
       fontFamily: {
         sans: ['var(--font-sans)', 'ui-sans-serif', 'system-ui', 'sans-serif'],
-        display: ['var(--font-display)', 'var(--font-sans)', 'ui-sans-serif', 'sans-serif'],
+        // `display` points at the MONO stack, not a display face. This is the single largest
+        // lever in the terminal redesign: every `font-display` heading in the app — page titles,
+        // card titles, the wordmark, stat values — becomes monospaced without touching a
+        // component. A terminal sets headings in the same face as its data because they are the
+        // same kind of object; a friendly geometric display face is what made this read as a
+        // marketing page wearing a dashboard's clothes.
+        display: ['var(--font-mono)', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace'],
         mono: ['var(--font-mono)', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace'],
+      },
+
+      // The second lever. Rather than sweep ~80 `rounded-*` classes across 30 files, the SCALE is
+      // collapsed: a terminal is drawn with rules and right angles, and a 16px corner radius is
+      // the most recognisable tell of the generated-dashboard look. `full` survives untouched
+      // because status dots are genuinely circles.
+      borderRadius: {
+        none: '0',
+        sm: '1px',
+        DEFAULT: '2px',
+        md: '2px',
+        lg: '2px',
+        xl: '2px',
+        '2xl': '3px',
+        '3xl': '3px',
+        full: '9999px',
       },
       letterSpacing: {
         tightest: '-0.035em',

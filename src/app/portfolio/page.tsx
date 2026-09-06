@@ -207,7 +207,7 @@ export default function PortfolioPage() {
           <h1
             data-enter
             style={{ '--i': 0 } as CSSProperties}
-            className="font-display text-[26px] font-extrabold leading-tight tracking-tightest sm:text-[34px]"
+            className="font-mono text-[22px] font-bold uppercase leading-tight tracking-[-0.02em] sm:text-[28px]"
           >
             Portfolio
           </h1>

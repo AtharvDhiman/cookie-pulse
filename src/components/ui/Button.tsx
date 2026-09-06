@@ -17,23 +17,26 @@ interface Props extends ButtonHTMLAttributes<HTMLButtonElement> {
 
 const VARIANTS: Record<Variant, string> = {
   // Gradient fill plus an accent glow — the one element on screen allowed to draw the eye.
-  primary:
-    'accent-gradient text-accent-ink shadow-[0_8px_24px_-10px_rgb(var(--accent-glow)/0.7)] hover:brightness-110 active:brightness-95',
+  // No glow shadow. The primary action is the only solid amber block on the screen, which is a
+  // stronger signal on a flat ground than a shadow ever was on a glassy one.
+  primary: 'accent-gradient text-accent-ink hover:brightness-110 active:brightness-95',
   secondary:
-    'bg-surface2 text-ink border border-hairline/10 hover:border-accent/40 hover:bg-surface2/70',
+    'bg-surface2 text-ink border border-hairline/25 hover:border-accent/60 hover:text-accent',
   ghost: 'text-ink2 hover:bg-surface2 hover:text-ink',
 };
 
+// Sizes carry no font-size: BASE fixes it at 12px so a button can never be taller than the row
+// it sits in. They set the box only.
 const SIZES: Record<Size, string> = {
-  sm: 'px-3 py-1.5 text-xs',
-  md: 'px-4 py-2.5 text-sm',
+  sm: 'px-2.5 py-1',
+  md: 'px-3.5 py-2',
 };
 
 // Explicit property list, not `transition-all`: that swept in the primary variant's 24px accent
 // box-shadow and its hover brightness filter, repainting a gradient-filled element every frame on
 // the most-pressed control in the app.
 const BASE =
-  'inline-flex items-center justify-center gap-2 rounded-xl font-semibold press transition-[transform,filter,background-color,border-color,color,box-shadow,opacity] duration-150 ease-[cubic-bezier(.2,.7,.3,1)]';
+  'inline-flex items-center justify-center gap-2 font-mono text-[12px] font-bold uppercase tracking-[0.06em] press transition-[transform,filter,background-color,border-color,color,box-shadow,opacity] duration-150 ease-[cubic-bezier(.2,.7,.3,1)]';
 
 /**
  * The button treatment as a class string, for the cases that cannot be a <button>.
@@ -76,10 +79,7 @@ export function ButtonLink({
       className={buttonClass({
         variant,
         size,
-        className: cn(
-          'motion-safe:hover:-translate-y-px motion-safe:active:translate-y-0',
-          className,
-        ),
+        className: cn('motion-safe:active:translate-y-px', className),
       })}
     >
       {children}

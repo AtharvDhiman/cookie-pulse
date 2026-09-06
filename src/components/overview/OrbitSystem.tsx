@@ -49,15 +49,24 @@ function Ring({
   ring,
   nodes,
   ariaLabel,
+  rev = false,
 }: {
   ring: (typeof RINGS)[number];
   nodes: OrbitNode[];
   ariaLabel: string;
+  /** Reverse this ring's direction. Explicit, because the nodes are no longer the nth-of-type
+      child that the old `:nth-of-type(odd)` CSS rule was counting. */
+  rev?: boolean;
 }) {
   const { r, tilt, dur } = ring;
 
   return (
-    <g className="orbit__ring" style={{ ['--dur' as string]: dur }}>
+    <g>
+      {/* STATIC. The ellipse used to rotate with its nodes, and three tilted ellipses turning at
+          different speeds in alternating directions swept through each other into a scribble —
+          it read as a scrawl rather than an instrument. A real readout holds its reference rings
+          fixed and moves only the contacts on them, which is also the only reading that means
+          anything here: the ring is the venue class, the dots are what is in it. */}
       <ellipse
         cx={CX}
         cy={CY}
@@ -66,7 +75,7 @@ function Ring({
         className="orbit__path"
         role="presentation"
       />
-      <g aria-label={ariaLabel}>
+      <g className="orbit__ring" style={{ ['--dur' as string]: dur }} data-rev={rev ? '' : undefined} aria-label={ariaLabel}>
         {nodes.map((n, i) => {
           const a = place(i, nodes.length);
           const x = CX + Math.cos(a) * r;
@@ -141,35 +150,26 @@ export function OrbitSystem() {
             : `${COOK_SYMBOL} orbit diagram, loading`
         }
       >
-        <defs>
-          <radialGradient id="orbit-core" cx="50%" cy="50%">
-            <stop offset="0%" stopColor="rgb(var(--accent-2))" />
-            <stop offset="55%" stopColor="rgb(var(--accent))" />
-            {/* Was 0.35. The disc faded to a near-transparent rim over its outer 45%, and the
-                readout sits ON that rim, so the ends of the price measured 1.51:1 in dark and the
-                whole string peaked at 3.44:1 in light. The core is a label background; it has to
-                be opaque. */}
-            <stop offset="100%" stopColor="rgb(var(--accent))" stopOpacity="1" />
-          </radialGradient>
-          <radialGradient id="orbit-bloom" cx="50%" cy="50%">
-            <stop offset="0%" stopColor="rgb(var(--accent-glow))" stopOpacity="0.42" />
-            <stop offset="100%" stopColor="rgb(var(--accent-glow))" stopOpacity="0" />
-          </radialGradient>
-        </defs>
-
-        {/* Bloom sits behind everything and never animates — a filter this large repainting per
-            frame is the most expensive thing this component could do. */}
-        <circle cx={CX} cy={CY} r={120} fill="url(#orbit-bloom)" />
+        {/* The graticule. Static, behind everything, and the reason this reads as an instrument
+            face rather than a logo: an orrery has no crosshair. */}
+        <g className="orbit__grat" aria-hidden="true">
+          <line x1={CX - 150} y1={CY} x2={CX - 46} y2={CY} />
+          <line x1={CX + 46} y1={CY} x2={CX + 150} y2={CY} />
+          <line x1={CX} y1={CY - 150} x2={CX} y2={CY - 46} />
+          <line x1={CX} y1={CY + 46} x2={CX} y2={CY + 150} />
+        </g>
 
         <Ring ring={RINGS[0]} nodes={venueNodes} ariaLabel="Trading venues" />
-        <Ring ring={RINGS[1]} nodes={poolNodes} ariaLabel="Liquidity pools" />
+        <Ring ring={RINGS[1]} nodes={poolNodes} ariaLabel="Liquidity pools" rev />
         <Ring ring={RINGS[2]} nodes={validatorNodes} ariaLabel="Validators" />
 
         {/* The core is COOK. Static: the one thing on screen that must never appear to wobble.
             r=34, not 26: at 26 the disc rendered 62.4px across while "$0.0001118" at 11px/700
             renders 67.05px, so the price was wider than the thing it was written on. 34 gives a
             40.8px radius against a 33.5px half-string. */}
-        <circle cx={CX} cy={CY} r={34} fill="url(#orbit-core)" className="orbit__core" />
+        {/* Flat amber. r=34, not 26: at 26 the disc rendered 62.4px across while "$0.0001118"
+            at 11px/700 renders 67.05px, so the price was wider than the thing it was written on. */}
+        <circle cx={CX} cy={CY} r={34} fill="rgb(var(--accent-fill))" className="orbit__core" />
         <circle cx={CX} cy={CY} r={34} className="orbit__core-ring" />
       </svg>
 

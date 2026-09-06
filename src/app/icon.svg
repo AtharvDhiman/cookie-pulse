@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <!-- The browser-tab mark. A static SVG rather than a generated ImageResponse: Satori, which
+       next/og renders through, does not support <mask>, and the bite in this mark IS a mask. A
+       favicon also has no reason to be computed at request time. -->
+  <title>Cookie Pulse</title>
+  <mask id="bite">
+    <rect width="32" height="32" fill="#fff"/>
+    <!-- The bite. Centre sits just outside the disc edge, so it takes a crescent rather than a hole. -->
+    <circle cx="26.5" cy="7" r="5.6" fill="#000"/>
+    <!-- Chips on a rising diagonal: the cookie is the chain, the chips are the readings. -->
+    <circle cx="10.4" cy="20" r="1.8" fill="#000"/>
+    <circle cx="14.9" cy="16.3" r="1.8" fill="#000"/>
+    <circle cx="19.4" cy="12.5" r="1.8" fill="#000"/>
+  </mask>
+  <!-- Amber tile, square to match the app's collapsed radius scale. -->
+  <rect width="32" height="32" rx="2" fill="#ffb02e"/>
+  <circle cx="16" cy="16" r="13.3" fill="#0e0b04" mask="url(#bite)"/>
+</svg>

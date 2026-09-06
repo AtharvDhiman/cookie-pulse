@@ -30,7 +30,20 @@ const TITLE = 'Cookie Pulse — watch the chain, trade the chain';
 const DESCRIPTION =
   'Analytics and trade terminal for Cookie Chain: live chain health, a 6,000-token screener, portfolio, and swaps routed through the Cookiebox aggregator.';
 
+/**
+ * Absolute base for og:image and twitter:image.
+ *
+ * Without this Next falls back to http://localhost:3000, which is what it was emitting: the card
+ * pointed at a host no crawler can reach, so every shared link would have rendered blank. VERCEL_URL
+ * is injected per-deployment, so previews and production each advertise their own image without any
+ * dashboard configuration; NEXT_PUBLIC_SITE_URL overrides it once there is a custom domain.
+ */
+const SITE_URL =
+  process.env.NEXT_PUBLIC_SITE_URL?.trim() ||
+  (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000');
+
 export const metadata: Metadata = {
+  metadataBase: new URL(SITE_URL),
   title: TITLE,
   description: DESCRIPTION,
   applicationName: 'Cookie Pulse',
@@ -39,7 +52,9 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: '#08090c',
+  // Matches --ground in the dark theme (10 11 13). It was #08090c, the pre-terminal ground, so
+  // mobile browser chrome painted a hair darker than the page it framed.
+  themeColor: '#0a0b0d',
   width: 'device-width',
   initialScale: 1,
 };

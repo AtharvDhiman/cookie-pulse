@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { Reveal } from '@/components/motion/Reveal';
+import { Logo } from '@/components/ui/Logo';
 import { EXPLORER_URL, RPC_URL } from '@/lib/config';
 
 const LINKS = [
@@ -13,14 +14,19 @@ export function Footer() {
   return (
     <footer className="border-t border-hairline/10">
       <Reveal index={0} className="mx-auto flex w-full max-w-[1280px] flex-col gap-3 px-3 py-6 sm:flex-row sm:items-center sm:justify-between sm:px-6">
-        <div className="min-w-0">
-          <p className="font-display text-[13px] font-bold tracking-tight">
+        <div className="flex min-w-0 items-start gap-2.5">
+          <span className="accent-gradient mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center text-accent-ink">
+            <Logo size={15} />
+          </span>
+          <div className="min-w-0">
+          <p className="font-mono text-[13px] font-bold uppercase tracking-[0.02em]">
             Cookie<span className="accent-text">Pulse</span>
           </p>
           <p className="mt-0.5 truncate text-[11px] text-muted">
             Live data from {RPC_URL.replace('https://', '')} · non-custodial, the wallet signs in
             your browser
           </p>
+          </div>
         </div>
 
         <nav aria-label="External resources" className="flex flex-wrap items-center gap-x-4 gap-y-1">

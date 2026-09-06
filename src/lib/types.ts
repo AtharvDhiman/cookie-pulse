@@ -155,6 +155,14 @@ export interface CapitalSnapshot {
 }
 
 export interface TokenBalance {
+  /**
+   * The token ACCOUNT this balance lives in, as the RPC reported it.
+   *
+   * Not derivable: a wallet can hold several accounts on one mint, and only one of them is the
+   * associated account. Re-deriving the ATA instead of carrying this made a listed balance
+   * unsendable whenever the tokens were not in the derived account.
+   */
+  pubkey: string;
   mint: string;
   amount: number;
   rawAmount: string;

@@ -30,6 +30,7 @@ export function useCookBalance() {
 }
 
 interface ParsedAccount {
+  pubkey: { toBase58(): string };
   account: { data: unknown };
 }
 
@@ -49,7 +50,8 @@ function toBalances(accounts: ParsedAccount[], programId: string): RawBalance[] 
     const amount = Number(raw) / 10 ** decimals;
     if (!Number.isFinite(amount) || amount <= 0) continue;
 
-    out.push({ mint, amount, rawAmount: raw, decimals, programId });
+    // The account address comes from the RPC rather than being re-derived: see TokenBalance.
+    out.push({ pubkey: a.pubkey.toBase58(), mint, amount, rawAmount: raw, decimals, programId });
   }
   return out;
 }

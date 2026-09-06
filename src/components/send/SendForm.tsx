@@ -66,7 +66,9 @@ interface AssetBase {
 /** Discriminated so `kind === 'spl'` narrows `programId` to a string at the build site. */
 type Asset =
   | (AssetBase & { kind: 'native'; programId: null })
-  | (AssetBase & { kind: 'spl'; programId: string });
+  // `tokenAccount` is the account the RPC reported this balance in. Only the SPL branch has one:
+  // native COOK is the wallet account itself.
+  | (AssetBase & { kind: 'spl'; programId: string; tokenAccount: string });
 
 const BUTTON_TEXT: Record<TxState, string> = {
   idle: 'Send',
@@ -302,7 +304,10 @@ export function SendForm() {
       return {
         kind: 'spl',
         programId: b.programId,
-        key: `${b.programId}:${b.mint}`,
+        // Keyed on the ACCOUNT, not the mint: a wallet can hold several accounts on one mint, and
+        // keying on the mint made every row after the first unselectable.
+        key: `${b.programId}:${b.pubkey}`,
+        tokenAccount: b.pubkey,
         mint: b.mint,
         symbol: wrapped ? 'wCOOK' : (b.token?.symbol ?? shortAddr(b.mint, 4, 4)),
         name: wrapped ? 'Wrapped COOK' : (b.token?.name ?? 'Unknown token'),
@@ -466,14 +471,12 @@ export function SendForm() {
     } else {
       const tokenProgram = new PublicKey(asset.programId);
       const mint = new PublicKey(asset.mint);
-      // getAssociatedTokenAddressSync(mint, owner, allowOwnerOffCurve, programId, ataProgramId)
-      const source = getAssociatedTokenAddressSync(
-        mint,
-        publicKey,
-        false,
-        tokenProgram,
-        ASSOCIATED_TOKEN_PROGRAM_ID,
-      );
+      // The account the RPC actually reported this balance in, not a re-derived associated
+      // account. Those are the same address for most wallets and different for any wallet holding
+      // a second account on the mint -- where the old derivation pointed at an account that might
+      // be empty or nonexistent, so a balance the picker had just listed could not be sent. It
+      // also removes an off-curve derivation that can throw TokenOwnerOffCurveError.
+      const source = new PublicKey(asset.tokenAccount);
       // The recipient may legitimately be a PDA, so off-curve owners are allowed here.
       const destination = getAssociatedTokenAddressSync(
         mint,

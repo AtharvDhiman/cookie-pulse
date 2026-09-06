@@ -314,6 +314,58 @@ order — total cost is a fraction of a cent.
 > If something fails, the fastest useful report is: **which page, what you clicked, the exact toast
 > text, and the browser console error.**
 
+## Security
+
+**Headers.** `next.config.mjs` sets a CSP, HSTS, `nosniff`, `X-Frame-Options: DENY`,
+`Referrer-Policy`, `Permissions-Policy` and COOP, and disables `X-Powered-By`. The frame protection
+is the one that matters most here: without it `/trade` and `/send` could be iframed and overlaid,
+on pages where people sign transactions.
+
+The CSP is specific to this app rather than copied:
+
+- `script-src` needs `'unsafe-inline'`. Every route is statically prerendered, so Next emits no
+  per-request nonce, and the RSC flight payload's hash changes on every build — neither a nonce nor
+  a hash allowlist is available without making the whole app dynamic.
+- `'unsafe-eval'` is added **in development only**. `next dev` runs webpack with
+  `eval-source-map`, which wraps every client module in `eval()`; without the gate `npm run dev`
+  renders a blank page. It is never sent in production.
+- `style-src` and `font-src` are `'self'` only. `@solana/wallet-adapter-react-ui`'s stylesheet
+  `@import`s Google Fonts on line 1, which fires at CSS parse time on every route — so it is
+  vendored in `src/styles/wallet-adapter.css` with that line removed and the modal pointed at the
+  app's own face. Measured afterwards: zero requests to `fonts.googleapis.com` or
+  `fonts.gstatic.com`, and `rpc.cookiescan.io` is the only external origin the app touches.
+- `img-src` allows `https:`. Token logos and NFT art are arbitrary off-chain URLs from a
+  third-party registry; this is the one directive that cannot be narrowed without breaking the
+  screener.
+- `usb`/`hid` are deliberately left enabled — Wallet Standard autodetection is on and a
+  hardware-wallet adapter needs WebHID — and COOP is `same-origin-allow-popups`, because a Wallet
+  Standard web wallet talks to its popup through `window.opener`.
+
+Verified: zero CSP violations across all six routes.
+
+HSTS deliberately omits `preload`, which is a one-way commitment binding the apex and every sibling
+subdomain to HTTPS and does nothing until the domain is submitted to hstspreload.org. Add it at the
+moment of submission. If the Vercel preview toolbar is left enabled it needs `vercel.live` in
+`script-src`/`connect-src`.
+
+**Secrets.** There are none. Every endpoint is public and every environment variable has a working
+default, so the app runs with no `.env` at all. Verified: no server-only variable name and no
+key-shaped string appears anywhere in `.next/static/`, and only `.env.example` is tracked.
+
+**Dependencies.** `npm audit` reports 27 advisories. Almost none is reachable from the deployed app,
+which was checked against the build output rather than assumed:
+
+| Package | Severity | In the client bundle |
+| --- | --- | --- |
+| `react-native`, `metro`, `image-size` | high | **0 files** — pulled in by the mobile wallet adapter, never bundled for web |
+| `bigint-buffer` | high | **0 files** |
+| `postcss` | high | devDependency; build-time only |
+
+`npm audit fix --force` would install `@solana/spl-token@0.1.8` and `next@16`, both breaking, and
+would break the wallet adapter for no security gain. Reachability is documented here instead.
+
+---
+
 ## Tech
 
 Next.js 15 (App Router) · TypeScript strict · Tailwind · `@solana/web3.js` v1 · `@solana/spl-token` ·

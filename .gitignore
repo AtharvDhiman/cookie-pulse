@@ -12,3 +12,6 @@ next-env.d.ts
 vendor/
 .devserver.log
 .prod.log
+
+# Vercel CLI writes .env.local on link; .env.example stays tracked on purpose.
+.env*.local

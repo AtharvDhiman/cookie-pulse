@@ -109,10 +109,33 @@ const SETTLE = `(async () => {
   }
   window.scrollTo(0, 0);
   await new Promise(r => setTimeout(r, 900));
+
+  // Wait for images, with a cap.
+  //
+  // Token logos are lazy-loaded from an IPFS gateway that answers in 4-6s cold, so a capture timed
+  // only on the reveal system photographs a table of letter-badge placeholders and calls it the
+  // product. Decoding is awaited rather than just the complete flag, because a decoded-but-not-
+  // image still screenshots blank.
+  const deadline = Date.now() + 25000;
+  for (;;) {
+    const imgs = [...document.querySelectorAll('img')];
+    const pending = imgs.filter(i => !i.complete);
+    if (pending.length === 0 || Date.now() > deadline) break;
+    await new Promise(r => setTimeout(r, 400));
+  }
+  await Promise.all(
+    [...document.querySelectorAll('img')].map(i =>
+      i.decode ? i.decode().catch(() => {}) : Promise.resolve()
+    )
+  );
+  await new Promise(r => setTimeout(r, 600));
   const targets = [...document.querySelectorAll('[data-reveal]')];
+  const imgs = [...document.querySelectorAll('img')];
   return JSON.stringify({
     total: targets.length,
     hidden: targets.filter(e => +getComputedStyle(e).opacity < 1).length,
+    images: imgs.length,
+    imagesLoaded: imgs.filter(i => i.complete && i.naturalWidth > 0).length,
   });
 })()`;
 
@@ -153,10 +176,9 @@ async function main() {
         awaitPromise: true,
         returnByValue: true,
       });
-      const reveal = JSON.parse(settled.result.value ?? '{"total":0,"hidden":0}') as {
-        total: number;
-        hidden: number;
-      };
+      const reveal = JSON.parse(
+        settled.result.value ?? '{"total":0,"hidden":0,"images":0,"imagesLoaded":0}',
+      ) as { total: number; hidden: number; images: number; imagesLoaded: number };
       if (reveal.hidden > 0) {
         failures++;
         console.error(
@@ -172,7 +194,8 @@ async function main() {
       writeFileSync(out, Buffer.from(png.data, 'base64'));
       console.log(
         `  ${shot.file.padEnd(16)} ${shot.path.padEnd(11)} ${WIDTH * SCALE}x${shot.height * SCALE}` +
-          `  reveals ${reveal.total - reveal.hidden}/${reveal.total}`,
+          `  reveals ${reveal.total - reveal.hidden}/${reveal.total}` +
+          `  images ${reveal.imagesLoaded}/${reveal.images}`,
       );
     }
     cdp.close();

@@ -278,7 +278,15 @@ export function SendForm() {
    * told the read failed instead, and the sufficiency check stands down rather than asserting a
    * shortfall it cannot know about.
    */
-  const balanceUnavailable = Boolean(publicKey) && !balancesLoading && (cookError || tokensError);
+  //
+  // Gated on there being NO DATA, not merely on an error. react-query keeps the last successful
+  // data on a failed refetch, so treating `isError` alone as "unknown" disabled Send every time a
+  // single background poll missed -- while a correct, recently-read balance was still on screen.
+  // The read is only genuinely unknown when nothing was ever returned.
+  const balanceUnavailable =
+    Boolean(publicKey) &&
+    !balancesLoading &&
+    ((cookError && cookBalance === undefined) || (tokensError && tokenBalances === undefined));
 
   const assets = useMemo<Asset[]>(() => {
     const cookToken = byMint.get(COOK_MINT) ?? null;
@@ -346,7 +354,11 @@ export function SendForm() {
    * One `getAccountInfo` answers it: an executable account is a program, and an account owned by
    * either token program is itself a token account.
    */
-  const { data: recipientAccount, isFetched: recipientFetched } = useQuery({
+  const {
+    data: recipientAccount,
+    isSuccess: recipientAnswered,
+    isError: recipientProbeFailed,
+  } = useQuery({
     queryKey: ['recipient-account', recipientPk?.toBase58() ?? null],
     enabled: Boolean(recipientPk),
     queryFn: () => connection.getAccountInfo(recipientPk as PublicKey, 'confirmed'),
@@ -361,10 +373,17 @@ export function SendForm() {
         recipientOwner === TOKEN_PROGRAM_ID ||
         recipientOwner === TOKEN_2022_PROGRAM_ID),
   );
-  // The probe must have ANSWERED before the form is armed. react-query leaves `data` undefined
-  // while pending, so without this a paste-then-immediately-click sends before the check returns
-  // -- which is exactly the case the check exists for.
-  const recipientChecked = !recipientPk || recipientFetched;
+  // `isSuccess`, NOT `isFetched`.
+  //
+  // react-query sets `isFetched` once a query has SETTLED, and an error settles it. So on any RPC
+  // failure -- a 429 from the public endpoint, a 5xx, an offline blip -- `recipientAccount` stayed
+  // undefined, `recipientUnusable` computed false, and the guard armed the form for exactly the
+  // addresses it exists to reject. The check failing is when it is least safe to proceed, not most.
+  //
+  // The same mistake was avoided one screen away in this file: `balanceUnavailable` already
+  // distinguishes "could not read" from "read, and it is zero". This now does too.
+  const recipientChecked = !recipientPk || recipientAnswered;
+  const recipientCheckFailed = Boolean(recipientPk) && recipientProbeFailed;
 
   const recipientInvalid = recipient.trim() !== '' && !recipientPk;
   const sendingToSelf = Boolean(recipientPk && publicKey && recipientPk.equals(publicKey));
@@ -443,6 +462,7 @@ export function SendForm() {
       !amountError &&
       recipientChecked &&
       !recipientUnusable &&
+      !recipientCheckFailed &&
       !balanceUnavailable,
   );
 
@@ -651,6 +671,12 @@ export function SendForm() {
           {showRecipientError ? <FieldNote tone="error">Not a valid address.</FieldNote> : null}
           {/* Stated plainly, because the consequence is permanent. A valid-looking address that
               cannot sign will accept the transfer and nobody can ever move it again. */}
+          {recipientCheckFailed ? (
+            <FieldNote tone="warn">
+              This address could not be checked — the RPC did not answer. Sending is held until it
+              does, because an address that cannot own tokens would take them permanently.
+            </FieldNote>
+          ) : null}
           {recipientUnusable ? (
             <FieldNote tone="error">
               {recipientAccount?.executable

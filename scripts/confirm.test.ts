@@ -273,6 +273,74 @@ async function main(): Promise<void> {
     stub.restore();
   }
 
+  // -- Regression: a reverted transaction is never reported as NEVER-SEEN ----------------------
+  // never-seen is the one verdict whose UI says nothing was spent and re-broadcasting is safe.
+  // The backstop resolving with value.err means the transaction reached a block and failed, so it
+  // must never produce that verdict however far behind the status reads are.
+  console.log('\na reverted transaction is never reported as never-seen');
+  {
+    const REVERTED = { InstructionError: [0, { Custom: 6001 }] };
+    // Status permanently claims no record, blockhash permanently dead: the exact shape that walks
+    // the loop to the never-seen verdict.
+    const stub = installStub({ status: () => null, blockhashValid: () => false });
+    const verdict: Verdict = await resolveConfirmation(SENT, async () => ({
+      context: { slot: 0 },
+      value: { err: REVERTED },
+    }));
+    check(
+      'reports failed, not never-seen',
+      verdict.kind === 'failed',
+      describeVerdict(verdict),
+    );
+    check(
+      'and never invites a re-broadcast',
+      verdict.kind !== 'never-seen',
+      'kind=' + verdict.kind,
+    );
+    stub.restore();
+  }
+
+  // -- Regression: a hanging blockhash read cannot hold the run open forever ---------------------
+  // readStatus was given a timeout first and the blockhash read beside it was not, so the hang the
+  // ceiling exists to prevent was still reachable through the other leg.
+  //
+  // Asserted by COUNTING calls rather than by waiting for the run to finish. With the read bounded
+  // the loop aborts at RPC_READ_TIMEOUT_MS and polls again, so isBlockhashValid is attempted
+  // repeatedly; unbounded, the very first call never settles and the count is stuck at 1 forever.
+  // That distinction is visible in ~20s, where waiting for the verdict would take the full 120s
+  // ceiling and make the suite unusable.
+  console.log('\na hanging blockhash read is aborted and retried');
+  {
+    const original = globalThis.fetch;
+    let blockhashCalls = 0;
+    globalThis.fetch = (async (_url: string, init?: RequestInit) => {
+      const body: unknown = JSON.parse(String(init?.body ?? '[]'));
+      const calls = Array.isArray(body) ? body : [body];
+      if (calls.some((c: { method: string }) => c.method === 'isBlockhashValid')) {
+        blockhashCalls += 1;
+        // Never settles, and ignores the abort signal — the worst case a wedged node presents.
+        return new Promise(() => {}) as unknown as Response;
+      }
+      const out = calls.map((c: { id: string }) => ({
+        jsonrpc: '2.0',
+        id: c.id,
+        result: { value: [null] },
+      }));
+      return { ok: true, status: 200, json: async () => out } as unknown as Response;
+    }) as typeof fetch;
+
+    // Deliberately not awaited: the run legitimately continues to the ceiling.
+    void resolveConfirmation(SENT, () => new Promise(() => {}));
+    await new Promise((r) => setTimeout(r, 20_000));
+
+    check(
+      'the hanging read is abandoned and tried again',
+      blockhashCalls >= 2,
+      blockhashCalls + ' isBlockhashValid attempts in 20s (1 would mean it never timed out)',
+    );
+    globalThis.fetch = original;
+  }
+
   console.log(`\n${failed === 0 ? GREEN : RED}${passed} passed, ${failed} failed${RESET}\n`);
   if (failed > 0) process.exit(1);
 }

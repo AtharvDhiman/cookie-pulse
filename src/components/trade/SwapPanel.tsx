@@ -589,11 +589,15 @@ export function SwapPanel({
     // `quoting`, not `isQuoting`: `loading` mounts a spinning Loader2, and keying that off a
     // background refetch would spin it for half a second every ten seconds, forever.
     if (quoting) return { label: 'Fetching quote…', disabled: true, loading: true };
-    // Ordered after `quoting` so a first fetch still reads as fetching, and before the quote
-    // checks below so a stale-but-present quote cannot satisfy them.
-    if (!amountMatchesQuote) return { label: 'Fetching quote…', disabled: true, loading: true };
     if (noRoute) return { label: 'No route for this pair', disabled: true, loading: false };
     if (!quote) return { label: 'Quote unavailable', disabled: true, loading: false };
+    // AFTER the two branches above, not before them.
+    //
+    // `amountMatchesQuote` is false whenever `quote` is null, so ordering it first made both of
+    // those states unreachable: a pair with no route, or a router that never answered, left the
+    // primary button spinning "Fetching quote…" forever instead of saying what was wrong. It only
+    // has a job to do once a quote EXISTS but describes a different amount than the box holds.
+    if (!amountMatchesQuote) return { label: 'Fetching quote…', disabled: true, loading: true };
     return { label: `Swap ${inputToken.symbol} for ${outputToken.symbol}`, disabled: false, loading: false };
   })();
 

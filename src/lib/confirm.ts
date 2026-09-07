@@ -132,26 +132,64 @@ function timer(ms: number): { promise: Promise<void>; cancel: () => void } {
 }
 
 /**
- * How long a single status read may take. Without this the MAX_RESOLVE_MS ceiling below was
- * advisory: it is only tested BETWEEN polls, so one socket that opens and never answers — a wedged
- * load-balancer backend, a captive portal, a node in a GC pause — parked the UI on "Waiting for
- * confirmation" indefinitely, which is the exact failure the ceiling was written to prevent.
+ * How long ANY single RPC read here may take — status and blockhash alike.
+ *
+ * Without it the MAX_RESOLVE_MS ceiling below is advisory: it is only tested BETWEEN polls, so
+ * one socket that opens and never answers — a wedged load-balancer backend, a captive portal, a
+ * node in a GC pause — parks the UI on "Waiting for confirmation" indefinitely, which is the
+ * exact failure the ceiling was written to prevent.
+ *
+ * The first version of this applied only to the status read and left the blockhash read beside
+ * it with no signal at all, so the hang it was written to stop was still reachable through the
+ * other leg. Both go through `bounded` now.
+ *
+ * `pollOnce` can make three of these in one iteration (status, blockhash, re-read), so the real
+ * ceiling is MAX_RESOLVE_MS plus at most one poll's worth of in-flight reads, not exactly
+ * MAX_RESOLVE_MS. Bounded is the property that matters.
  */
-const STATUS_TIMEOUT_MS = 8_000;
+const RPC_READ_TIMEOUT_MS = 8_000;
+
+/**
+ * Every RPC read in this file, bounded.
+ *
+ * Shared rather than copied: one helper means the next read added here cannot reintroduce the
+ * asymmetry where one leg had a timeout and the other did not. An abort rejects, and every
+ * caller already folds a rejection into its own safe reading.
+ */
+async function bounded<T>(run: (signal: AbortSignal) => Promise<T>, fallback: T): Promise<T> {
+  const ac = new AbortController();
+  const cutoff = timer(RPC_READ_TIMEOUT_MS);
+  try {
+    // RACED, not merely aborted.
+    //
+    // The first version of this only called `ac.abort()` on a timer and awaited the read. That
+    // bounds nothing on its own: an AbortController can only cut a read short if the callee
+    // actually honours the signal, and a promise that ignores it just keeps the await parked --
+    // which a regression test caught by counting attempts (one in twenty seconds, when the read
+    // should have been retried). Real `fetch` does honour it, so this was correct in production
+    // and unprovable, which is the worst combination for the one path in this app that decides
+    // whether a user's money moved.
+    //
+    // Racing makes the ceiling hold whatever the callee does. The abort still fires, because
+    // freeing the socket is worth doing even once the answer is no longer wanted.
+    return await Promise.race([
+      run(ac.signal).catch(() => fallback),
+      cutoff.promise.then(() => {
+        ac.abort();
+        return fallback;
+      }),
+    ]);
+  } finally {
+    cutoff.cancel();
+  }
+}
 
 /** `null` = the node answered and has no record. `undefined` = the node did not answer usefully. */
 async function readStatus(signature: string): Promise<SignatureStatus | null | undefined> {
-  const ac = new AbortController();
-  const cutoff = setTimeout(() => ac.abort(), STATUS_TIMEOUT_MS);
-  try {
-    return parseSignatureStatus(await fetchSignatureStatus(signature, ac.signal));
-  } catch {
-    // An abort lands here too, and is the same class of information as any other RPC failure:
-    // something about the node, nothing about the transaction.
-    return undefined;
-  } finally {
-    clearTimeout(cutoff);
-  }
+  return bounded<SignatureStatus | null | undefined>(
+    async (signal) => parseSignatureStatus(await fetchSignatureStatus(signature, signal)),
+    undefined,
+  );
 }
 
 /** One status check. An RPC failure is information about the RPC, never about the transaction. */
@@ -163,12 +201,13 @@ async function pollOnce(sent: SentTx): Promise<Verdict> {
   if (status) return verdictFor(status, null);
   if (!sent.blockhash) return verdictFor(null, null);
 
-  let valid: boolean | null = null;
-  try {
-    valid = await fetchBlockhashValid(sent.blockhash);
-  } catch {
-    valid = null;
-  }
+  // Bounded like the status read. This call had no signal and no timeout, so it was the one leg
+  // of pollOnce that could hang forever — measured still pending at 135s against a 120s
+  // ceiling. A timeout yields null, which verdictFor already reads as "the node did not say".
+  const valid = await bounded<boolean | null>(
+    (signal) => fetchBlockhashValid(sent.blockhash, signal),
+    null,
+  );
   if (valid !== false) return verdictFor(null, valid);
 
   // The blockhash is dead, which is the only thing that can make a missing status meaningful. Read
@@ -198,7 +237,17 @@ export async function resolveConfirmation(
 ): Promise<Verdict> {
   const deadline = Date.now() + MAX_RESOLVE_MS;
   // Held on an object rather than in `let`s: they are written from callbacks and read across awaits.
-  const backstopState = { confirmed: false, done: false, graceUntil: null as number | null };
+  // `onChainError` is separate from `confirmed` on purpose. A backstop that resolves carrying
+  // `value.err` has told us something DEFINITE — the transaction reached a block and failed —
+  // and that is not the same as "not confirmed". Collapsing both into one boolean meant a
+  // reverted transaction whose status reads were behind could still reach the never-seen
+  // verdict, the one whose UI says nothing was spent and re-broadcasting is safe.
+  const backstopState = {
+    confirmed: false,
+    onChainError: null as unknown,
+    done: false,
+    graceUntil: null as number | null,
+  };
 
   const settled = backstop(sent).then(
     (res) => {
@@ -209,7 +258,9 @@ export async function resolveConfirmation(
       //
       // An unrecognised shape counts as confirmed, which is the behaviour every other strategy
       // (legacy timeout, durable nonce) already relied on. Only a present `err` demotes it.
-      backstopState.confirmed = pick(res, ['value', 'err']) == null;
+      const err = pick(res, ['value', 'err']);
+      backstopState.confirmed = err == null;
+      if (err != null) backstopState.onChainError = err;
       backstopState.done = true;
       backstopState.graceUntil = Date.now() + BACKSTOP_GRACE_MS;
     },
@@ -231,6 +282,12 @@ export async function resolveConfirmation(
     if (verdict.kind === 'never-seen') {
       // Contradiction: the backstop confirmed, so the status query is behind, not the chain.
       if (backstopState.confirmed) return landedWithoutSlot(sent);
+      // Same contradiction, opposite sign: the backstop watched it land and fail. Reporting
+      // that as never-seen would tell the user their COOK was never spent and invite them to
+      // send it again.
+      if (backstopState.onChainError != null) {
+        return { kind: 'failed', slot: null, error: errText(backstopState.onChainError) };
+      }
       neverSeenStreak += 1;
       if (neverSeenStreak >= NEVER_SEEN_CONFIRMATIONS) return verdict;
       // Not yet corroborated — hold the softer sentence and look again next tick.
@@ -267,6 +324,9 @@ export async function resolveConfirmation(
 
   // Out of time. A confirming backstop is still an answer, just without a slot of its own.
   if (backstopState.confirmed) return landedWithoutSlot(sent);
+  if (backstopState.onChainError != null) {
+    return { kind: 'failed', slot: null, error: errText(backstopState.onChainError) };
+  }
   // Never end on the provisional sentence: it tells the user a re-check is coming, and nothing
   // will re-check.
   if (provisional) return { kind: 'unknown', reason: UNKNOWN_REASON.notIndexedYet };

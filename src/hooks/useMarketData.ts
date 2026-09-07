@@ -126,10 +126,15 @@ export function useTokenDirectory(
     return merged;
   }, [byMint, query.data]);
 
-  // Whether the lookup has ANSWERED, which is not the same as whether it found anything. Callers
-  // were inferring "still loading" from a mint's absence, so a mint the registry simply does not
-  // carry looked permanently in-flight.
-  return { directory, resolved: missing.length === 0 || query.isFetched };
+  // Whether the lookup SUCCEEDED, which is not the same as whether it found anything, and not the
+  // same as whether it finished.
+  //
+  // `isFetched` was wrong here: react-query sets it once a query settles, including in error. So a
+  // lookup that failed reported itself as resolved, and /trade then told the user a perfectly real
+  // mint "is not in the Cookie Chain registry" and silently swapped their token for the default --
+  // on a network blip. `isSuccess` distinguishes "asked and got an answer" from "asked and failed",
+  // and a failed lookup now keeps the caller in its pending branch, which is the safe one.
+  return { directory, resolved: missing.length === 0 || query.isSuccess };
 }
 
 export function useMarkets() {

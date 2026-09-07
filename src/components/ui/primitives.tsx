@@ -305,7 +305,14 @@ export function TokenLogo({
   symbol: string;
   size?: number;
 }) {
-  const [broken, setBroken] = useState(false);
+  // Which URL failed, not merely THAT one did.
+  //
+  // A bare `broken` boolean never reset when the `logo` prop changed, and these components are
+  // reused rather than remounted -- the screener re-sorts in place, the token picker re-filters --
+  // so a single dead image permanently blanked every token that later occupied that row. Comparing
+  // against the current `logo` makes the flag reset itself whenever a different one arrives.
+  const [failedLogo, setFailedLogo] = useState<string | null>(null);
+  const broken = failedLogo !== null && failedLogo === logo;
   const px = { width: size, height: size };
 
   if (!logo || broken) {
@@ -324,7 +331,7 @@ export function TokenLogo({
       alt=""
       style={px}
       loading="lazy"
-      onError={() => setBroken(true)}
+      onError={() => setFailedLogo(logo)}
       className="shrink-0 rounded-full bg-surface2 object-cover ring-1 ring-hairline/10"
     />
   );

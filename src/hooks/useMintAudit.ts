@@ -56,6 +56,9 @@ async function fetchMintAudit(mints: string[], signal?: AbortSignal): Promise<Mi
  * the chain agree, which is what makes the rest of the app's numbers trustworthy. When they disagree
  * the chain wins and the disagreement is reported, never quietly resolved.
  */
+/** Base58, 32-44 chars: the shape getMultipleAccounts will accept without rejecting the batch. */
+const BASE58_PUBKEY = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
+
 export function useMintAudit(extraMints: string[] = []) {
   const { tokens } = useRegistry();
 
@@ -63,7 +66,13 @@ export function useMintAudit(extraMints: string[] = []) {
   // usually outside it and had NO safety facts at all -- silently, which reads as "nothing to
   // report" rather than "not checked". `chunkMints` already batches 100 per getMultipleAccounts,
   // so carrying the one or two mints actually on screen costs no extra request.
-  const extraKey = extraMints.join(',');
+  // `extraMints` arrives from ?in= / ?out= on /trade, which is to say from a stranger's URL.
+  // getMultipleAccounts rejects the ENTIRE batch with -32602 if any single element is not a valid
+  // base58 pubkey, so one junk character in a shared link deleted the mint- and freeze-authority
+  // facts for all 92 priced tokens at once -- silently, since a missing fact renders as no warning
+  // rather than as an error. Anything that is not plausibly a pubkey is dropped before it can do
+  // that; the deep-link handling in SwapPanel already reports an unresolvable mint separately.
+  const extraKey = extraMints.filter((m) => BASE58_PUBKEY.test(m)).join(',');
   const mints = useMemo(
     () => [...new Set([...tokens.map((t) => t.mint), ...extraKey.split(',').filter(Boolean)])].sort(),
     [tokens, extraKey],
